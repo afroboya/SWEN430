@@ -1,0 +1,8 @@
+void main() {
+    // Check syntax
+    try {
+	assert true;
+    } catch(int x) {
+	assert false;
+    }
+}

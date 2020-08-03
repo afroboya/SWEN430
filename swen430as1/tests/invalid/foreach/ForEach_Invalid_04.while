@@ -1,0 +1,7 @@
+int f(int[] items) {
+    int item = 0;
+    for(int item : items) {
+	item = item + 1;
+    }
+    return item;
+}

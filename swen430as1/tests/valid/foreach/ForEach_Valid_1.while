@@ -1,0 +1,14 @@
+int sum(int[] items) {
+    int sum = 0;
+    for(int item : items) {
+	sum = sum + item;
+    }
+    return sum;
+}
+
+void main() {
+    assert sum([]) == 0;
+    assert sum([1]) == 1;
+    assert sum([2,3]) == 5;
+    assert sum([3,4,5]) == 12;
+}

@@ -1,0 +1,7 @@
+void f(int x) {
+    try {
+        int x = 1;
+    } catch(int z) {
+
+    }
+}

@@ -1,0 +1,6 @@
+void main() {
+    // Check syntax
+    if(1 != 1) {
+	throw 1;
+    }
+}

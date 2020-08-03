@@ -1,0 +1,4 @@
+void main() {
+    int[] s = "Hello World";
+    assert s == "Hello World";
+}

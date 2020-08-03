@@ -1,0 +1,30 @@
+type Point is { real x, real y }
+
+Point center(Point[] points) {
+    real x = 0.0;
+    real y = 0.0;
+    for(int i = 0;i!=|points|;i=i+1) {
+	x = x + points[i].x;
+	y = y + points[i].y;
+    }
+    x = x / |points|;
+    y = y / |points|;    
+    return {x:x, y:y};
+}
+
+void main() {
+    Point p1 = {x:0.1, y:0.3};
+    Point p2 = {x:-1.23, y:-2.223};
+    Point p3 = {x:10.11, y:-10.11};
+    
+    assert center([p1]) == p1;
+    assert center([p1,p2]) == {x:-0.565,y:-0.9614999999999999};
+    assert center([p2,p1]) == {x:-0.565,y:-0.9614999999999999};
+    assert center([p1,p1,p2,p2]) == {x:-0.565,y:-0.9614999999999999};
+    assert center([p2,p2,p1,p1]) == {x:-0.565,y:-0.9615};
+    assert center([p1,p2,p3]) == {x:2.9933333333333336,y:-4.011};
+    assert center([p2,p1,p3]) == {x:2.9933333333333336,y:-4.011};
+    assert center([p1,p3,p2]) == {x:2.9933333333333327,y:-4.010999999999999};
+    assert center([p3,p2,p1]) == {x:2.9933333333333327,y:-4.010999999999999};
+    assert center([p3,p1,p2]) == {x:2.9933333333333327,y:-4.010999999999999};
+}

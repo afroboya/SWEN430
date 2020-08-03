@@ -1,0 +1,17 @@
+int max(int[] items) {
+    int r;
+    if(|items| > 0) {
+       r = items[0];
+       for(int i=1;i!=|items|;i=i+1) {
+           if(items[i] > r) { r = items[i]; }
+       }
+       return r;
+    } else {
+       throw { error: "precondition failure" };
+    }
+}
+
+void main() {
+     assert max([1]) == 1;
+     assert max([2,3]) == 3;
+}

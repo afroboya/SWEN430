@@ -1,0 +1,120 @@
+<project name="whilelang" default="jarfile">  
+  <property name="version" value="1.0"/>
+
+  <!-- ================================================================== -->
+  <!-- Configuration -->
+  <!-- ================================================================== -->
+  <import file="config.xml"/>
+
+  <!-- ============================================== -->
+  <!-- Build Commands -->
+  <!-- ============================================== -->
+
+  <target name="build">
+    <mkdir dir="${CLASS_DIR}"/>
+    <javac debug="true"
+	   debuglevel="vars,lines,source"
+	   source="1.8"
+	   includeantruntime="true"
+	   srcdir="${JAVA_DIR}"
+	   destdir="${CLASS_DIR}">
+      <include name="*/**"/>
+      <exclude name="whilelang/testing/**"/> 
+      <exclude name="*/**/package-info.java"/>
+      <classpath>
+	<pathelement path="${jasm.jar}"/>	
+	<pathelement path="${jx86.jar}"/>
+	<pathelement path="${junit.jar}"/>
+      </classpath>      
+    </javac>
+  </target>
+
+  <!-- ============================================== -->
+  <!-- Documenation --> 
+  <!-- ============================================== -->
+
+  <target name="doc">
+    <javadoc
+       destdir="docs/api"
+       author="true"
+       version="true"
+       use="true"
+       windowtitle="While Lang Compiler API">
+      <doctitle><![CDATA[<h1>The While Lang Compiler (v${version})</h1>]]></doctitle>
+      <bottom><![CDATA[<i>Copyright &#169; 2013 David J. Pearce. All Rights Reserved.</i>]]></bottom>
+      <packageset dir="src">
+	<include name="whilelang/**"/>
+	<exclude name="whilelang/testing/**"/>
+      </packageset>
+      </javadoc>
+  </target>
+
+  <!-- ============================================== -->
+  <!-- Distribution -->
+  <!-- ============================================== -->
+
+  <target name="jarfile" depends="build">
+    <mkdir dir="tmp"/>
+    <manifest file="tmp/MANIFEST.MF">
+      <attribute name="Built-By" value="${user.name}"/>
+      <attribute name="Main-Class" value="whilelang.Main"/>
+    </manifest>    
+    <jar destfile="${JAR_DIR}/whilelang-v${version}.jar" manifest="tmp/MANIFEST.MF">
+      <fileset dir="${JAVA_DIR}">
+	<include name="whilelang/**/*.java"/>
+	<include name="whilelang/**/*.class"/>
+      </fileset>
+      <fileset dir="${CLASS_DIR}">
+	<include name="whilelang/**/*.class"/>
+      </fileset>      
+    </jar>
+    <delete dir="tmp"/>
+    <echo message="============================================="/>
+    <echo message="BUILT: ${JAR_DIR}/whilelang-${version}.jar"/>
+    <echo message="============================================="/>
+  </target>
+
+  <target name="dist" depends="jarfile">
+    <mkdir dir="whilelang-v${version}"/>
+    <copy todir="whilelang-v${version}">
+      <fileset dir=".">
+	<include name="LICENSE"/>
+	<include name="config.xml"/>	
+	<include name="build.xml"/>
+	<include name="pom.xml"/>	
+	<include name="src/**/*.java"/>
+	<include name="tests/**/*.while"/>	
+	<include name="${JAR_DIR}/*.jar"/>
+	<include name="${LIB_DIR}/*.jar"/>	
+      </fileset>
+    </copy>
+    <tar destfile="${BIN_DIR}/whilelang-src-v${version}.tar" longfile="gnu">
+      <tarfileset dir="." includes="whilelang-v${version}/**/*"/>
+    </tar>
+    <gzip destfile="${BIN_DIR}/whilelang-src-v${version}.tgz" src="${BIN_DIR}/whilelang-src-v${version}.tar"/>
+    <delete file="${BIN_DIR}/whilelang-src-v${version}.tar"/>
+    <delete dir="whilelang-v${version}"/>
+    <echo message="============================================="/>
+    <echo message="BUILT: ${BIN_DIR}/whilelang-src-v${version}.tgz"/>
+    <echo message="============================================="/>
+  </target>
+
+  
+  <!-- ============================================== -->
+  <!-- Misc Commands -->
+  <!-- ============================================== -->
+
+  <target name="clean">
+    <delete includeEmptyDirs="true" failonerror="false">
+      <fileset file="*~"/>
+      <fileset dir="${BIN_DIR}"/>
+      <fileset dir="docs"/>
+      <fileset dir="tests">
+	<include name="**/*.class"/>
+	<include name="**/*.wyil"/>
+	<include name="**/*.o"/>
+      </fileset>
+    </delete>
+  </target>
+
+</project>

@@ -1,0 +1,8 @@
+void main() {
+    assert 0.123 >= 0.012;
+    assert 0.123 > 0.012;
+    assert 0.123 >= 0.123;
+    assert 0.123 < 1.012;
+    assert 0.123 <= 1.012;    
+    assert 0.123 <= 0.123;
+}

@@ -1,0 +1,19 @@
+int[] trim(int[] items, int n) {
+    int i = 0;
+    int[] rs = [0;n];
+
+    for(int item : items) {
+	if(i >= n) { break; }
+        rs[i] = item;
+        i = i + 1;
+    }
+    return rs;
+}
+
+void main() {
+    assert trim([1],0) == [];
+    assert trim([2,3],1) == [2];
+    assert trim([3,4,5],1) == [3];
+    assert trim([3,4,5],2) == [3,4];
+    assert trim([-2,-3,1,2,-23,3,2345,4,5],4) == [-2,-3,1,2];
+}

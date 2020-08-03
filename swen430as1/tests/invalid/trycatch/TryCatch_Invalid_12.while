@@ -1,0 +1,8 @@
+void f(int x) {
+    //
+    try {
+        int r = 1;
+    } catch(int x) {
+        r = 1;
+    }
+}

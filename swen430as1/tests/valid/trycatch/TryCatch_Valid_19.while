@@ -1,0 +1,25 @@
+void f(int x) { throw {g:x}; }
+
+int g(int x) {
+     try {
+        f(x);
+     } catch(int n) {
+       throw n;
+     } catch(int[] xs) {
+       throw xs;
+     } catch({int f} r) {
+       throw r;
+     } catch({bool h} r) {
+       throw r;
+     } catch({int g} r) {
+
+     } catch({int[] f} r) {
+       throw r;
+     }
+
+     return x;
+}
+
+void main() {
+     assert g(1) == 1;
+}

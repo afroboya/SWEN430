@@ -1,0 +1,10 @@
+int f(int x) {
+    //
+    try {
+        return 1;
+    } catch(int x) {
+        return 2;
+    }
+    // this is dead code
+    return 3;
+}

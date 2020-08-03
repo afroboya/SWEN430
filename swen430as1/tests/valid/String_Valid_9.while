@@ -1,0 +1,6 @@
+void main() {
+    int[] s1 = "Hello World";
+    {int[] f} r1 = {f:s1};
+    assert r1 == {f:"Hello World"};
+    assert r1 != {f:"Blah"};
+}

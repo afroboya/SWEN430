@@ -1,0 +1,7 @@
+int f(int x) {
+    try {
+       x = false;
+    } catch(int z) {
+
+    }
+}

@@ -1,0 +1,9 @@
+int f(int x) {
+    //
+    try {
+        int r = 1;
+    } catch(int r) {
+        r = 1;
+    }
+    return r;
+}

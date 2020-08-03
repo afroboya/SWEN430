@@ -1,0 +1,14 @@
+real max(real x, real y) {
+   if(x >= y) { 
+     return x; 
+   } else {
+      return y;
+   }
+}
+
+void main() {
+  assert max(1.234,2.22) == 2.22;
+  assert max(2.22,1.234) == 2.22;
+  assert max(-1.23,-3.33) == -1.23;
+  assert max(-1.23,21.31) == 21.31;
+}

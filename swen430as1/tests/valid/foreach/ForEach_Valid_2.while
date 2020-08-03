@@ -1,0 +1,19 @@
+int[] reverse(int[] xs) {
+    int i = |xs|;
+    int[] ys = xs;
+    // assign items in reverse order
+    for(int item : xs) {
+        i = i - 1;
+        ys[i] = item;
+    }
+    // done
+    return ys;
+}
+
+void main() {
+    assert reverse([]) == [];
+    assert reverse([1]) == [1];
+    assert reverse([2,3]) == [3,2];
+    assert reverse([3,4,5]) == [5,4,3];    
+    assert reverse([1,2,3,4,5]) == [5,4,3,2,1];
+}

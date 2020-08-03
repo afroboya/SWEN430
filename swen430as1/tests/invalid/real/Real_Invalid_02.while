@@ -1,0 +1,3 @@
+void main() {
+    assert .123 == 0.123;
+}

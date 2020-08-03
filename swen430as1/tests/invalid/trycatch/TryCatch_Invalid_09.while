@@ -1,0 +1,11 @@
+int f(int x) {
+    int r;
+    //
+    try {
+        r = 1;
+    } catch(int y) {
+        // 
+    }
+    //
+    return r;
+}

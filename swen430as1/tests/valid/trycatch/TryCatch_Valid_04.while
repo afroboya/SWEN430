@@ -1,0 +1,25 @@
+bool f(int x, int y) {
+    if(x == y) {
+	throw (x >= 0);
+    } else {
+	return x <= y;
+    }
+}
+
+void main() {
+    try {
+	assert f(0,1) == true;
+	assert f(1,32) == true;
+	assert f(2,1) == false;
+	assert f(2,2) == false;
+	assert false; // deadcode
+    } catch(bool e) {
+	assert e == true;
+    }
+    try {
+	assert f(-1,-1) == false;
+	assert false; // deadcode
+    } catch(bool h) {
+	assert h == false;
+    }   
+}

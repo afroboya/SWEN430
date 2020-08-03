@@ -1,0 +1,7 @@
+void main() {
+    int sum = 0;
+    for(int item : [4,5,3,2,1]) {
+	sum = sum + item;
+    }
+    assert sum == 15;
+}

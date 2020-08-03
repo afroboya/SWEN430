@@ -1,0 +1,7 @@
+void main() {
+    try {
+	throw 1;
+    } catch(int x) {
+	assert x == 1;
+    }
+}

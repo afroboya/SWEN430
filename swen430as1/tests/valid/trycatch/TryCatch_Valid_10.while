@@ -1,0 +1,11 @@
+type Exception is { int code }
+
+void main() {
+    try {
+	int[] xs = [0];
+	int x = xs[1];
+    } catch(Exception e) {
+	// index out-of-bounds exception
+	assert e.code == 1;
+    }
+}

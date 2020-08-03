@@ -1,0 +1,19 @@
+type Exception is { int code }
+
+void main() {
+    // nested try-catch
+    try {
+	try {
+	    assert false;
+	} catch(Exception e) {
+	    // assertion failure
+	    if(e.code == 3) {
+		throw 3;
+	    }
+	} catch(int e) {
+	    assert false;
+	}
+    } catch(int e) {
+	assert e == 3;
+    }
+}

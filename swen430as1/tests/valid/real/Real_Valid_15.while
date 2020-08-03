@@ -1,0 +1,5 @@
+void main() {
+    {{real f} h, int g} r = {h:{f:1}, g:2};
+    //
+    assert r == {h:{f:1.0}, g:2.0};
+}

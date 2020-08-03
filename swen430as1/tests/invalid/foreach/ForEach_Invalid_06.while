@@ -1,0 +1,11 @@
+int[] g(int x) {
+    return [x];    
+}
+
+int f() {
+    int x = 0;
+    for(int item : g(item)) {
+	x = x + item;
+    }
+    return item;
+}

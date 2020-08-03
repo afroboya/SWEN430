@@ -1,0 +1,5 @@
+void f(int x) {
+    try {
+        return 2 + f(x-1)
+    } // require one or more catch handlers	
+}

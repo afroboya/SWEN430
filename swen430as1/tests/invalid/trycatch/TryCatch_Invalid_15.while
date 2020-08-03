@@ -1,0 +1,5 @@
+int f(int x) {
+    throw false;
+    // this is dead code
+    return 3;
+}

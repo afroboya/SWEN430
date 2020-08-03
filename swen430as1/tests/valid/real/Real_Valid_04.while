@@ -1,0 +1,21 @@
+real sum_nonneg(real[] items) {
+    real sum = 0.0;
+    for(int i = 0;i!=|items|;i=i+1) {
+	if(items[i] < 0.0) { continue; }
+	sum = sum + items[i];
+    }
+    return sum;
+}
+
+void main() {
+    assert sum_nonneg([]) == 0;
+    assert sum_nonneg([1.1]) == 1.1;
+    assert sum_nonneg([-0.2,0.0003]) == 0.0003;
+    assert sum_nonneg([0.0003,-0.2]) == 0.0003;
+    assert sum_nonneg([2.2,3.73]) == 5.93;
+    assert sum_nonneg([3.8,4.001,5.54]) == 13.341000000000001;
+    assert sum_nonneg([3.8,-0.453,4.001,5.54]) == 13.341000000000001;
+    assert sum_nonneg([3.8,4.001,-10.284,5.54]) == 13.341000000000001;
+    assert sum_nonneg([3.8,4.001,-100.231,-10.284,5.54]) == 13.341000000000001;
+    assert sum_nonneg([-0.001,3.8,4.001,-100.231,-10.284,5.54,-1.02934]) == 13.341000000000001;    
+}

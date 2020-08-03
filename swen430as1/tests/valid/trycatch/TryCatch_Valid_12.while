@@ -1,0 +1,10 @@
+type Exception is { int code }
+
+void main() {
+    try {
+	assert false;
+    } catch(Exception e) {
+	// assertion failure
+	assert e.code == 3;
+    }
+}

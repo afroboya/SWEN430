@@ -1,0 +1,16 @@
+type T is real
+
+real sum(T[] items) {
+    real sum = 0.0;
+    for(int i = 0;i!=|items|;i=i+1) {
+	sum = sum + items[i];
+    }
+    return sum;
+}
+
+void main() {
+    assert sum([]) == 0;
+    assert sum([1.1]) == 1.1;
+    assert sum([2.2,3.73]) == 5.93;
+    assert sum([3.8,4.001,5.54]) == 13.341000000000001;
+}

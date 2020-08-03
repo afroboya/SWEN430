@@ -1,0 +1,19 @@
+bool contains(int[] items, int item) {
+    for(int i : items) {
+	if(i == item) { return true; }
+    }
+    return false;
+}
+
+void main() {
+    assert contains([],0) == false;
+    assert contains([1],0) == false;
+    assert contains([1],1) == true;
+    assert contains([2,3],1) == false;
+    assert contains([2,3],2) == true;
+    assert contains([2,3],3) == true;
+    assert contains([4,5,6],3) == false;
+    assert contains([4,5,6],4) == true;
+    assert contains([4,5,6],5) == true;
+    assert contains([4,5,6],6) == true;
+}

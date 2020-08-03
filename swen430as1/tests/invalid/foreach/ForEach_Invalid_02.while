@@ -1,0 +1,7 @@
+int f(int items) {
+    int x = 0;
+    for(int item : items) {
+	x = x + item;
+    }
+    return x;
+}

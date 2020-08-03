@@ -1,0 +1,23 @@
+int count(bool[] items) {
+    int count = 0;
+    for(bool b : items) {
+	if(b) { count = count + 1; }
+    }
+    return count;
+}
+
+void main() {
+    assert count([]) == 0;
+    assert count([false]) == 0;
+    assert count([true]) == 1;
+    assert count([false,true]) == 1;
+    assert count([true,false]) == 1;
+    assert count([true,true]) == 2;
+    assert count([false,false,false]) == 0;
+    assert count([false,false,true]) == 1;
+    assert count([false,true,false]) == 1;
+    assert count([true,false,false]) == 1;
+    assert count([true,false,true]) == 2;
+    assert count([true,true,false]) == 2;
+    assert count([true,true,true]) == 3;
+}
