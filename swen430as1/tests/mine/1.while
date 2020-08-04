@@ -1,0 +1,5 @@
+void main() {
+    int s2 = 2;
+    real s1 = s2+1;
+    assert(s1==3);
+}
