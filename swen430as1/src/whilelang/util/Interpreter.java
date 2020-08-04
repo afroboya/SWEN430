@@ -306,37 +306,41 @@ public class Interpreter {
 		if (re != null) {
 			value = execute(re, frame);
 
-			if(stmt.getType() instanceof Type.Real){
-				if(value instanceof Integer){
-					value = ((Integer)value).doubleValue();
-				}
-			}else if(stmt.getType() instanceof Type.Array){
-				if(value instanceof ArrayList){
-					ArrayList value_array = (ArrayList)value;
-					if(!value_array.isEmpty() && value_array.get(0) instanceof Number) {
-						ArrayList<Double> double_arr = new ArrayList<>();
-						for (Object val : value_array) {
-							double_arr.add(((Number) val).doubleValue());
-						}
-						value = double_arr;
-					}
-				}
-			}else if(stmt.getType() instanceof Type.Record){
-				Type.Record t = (Type.Record)stmt.getType();
-				HashMap<String,Object> currentMap = (HashMap<String, Object>) value;
-				HashMap<String,Object> newMap = new HashMap<>();
-				//first value is type, second is variable name
-				for(Pair<Type,String> p:t.getFields()){
-					String key = p.second();
-					//if type real ensure all values are double
-					if(p.first() instanceof Type.Real){
-						newMap.put(key,((Number)currentMap.get(key)).doubleValue());
-					}else{
-						newMap.put(key,currentMap.get(key));
-					}
-				}
-				value = newMap;
-			}
+			//This code would convert from int to double, but it doesnt seem to be needed
+
+//			if(stmt.getType() instanceof Type.Real){
+//				if(value instanceof Integer){
+//					value = ((Integer)value).doubleValue();
+//				}
+//			}
+
+//			else if(stmt.getType() instanceof Type.Array){
+//				if(value instanceof ArrayList){
+//					ArrayList value_array = (ArrayList)value;
+//					if(!value_array.isEmpty() && value_array.get(0) instanceof Double) {
+//						ArrayList<Double> double_arr = new ArrayList<>();
+//						for (Object val : value_array) {
+//							double_arr.add(((Number) val).doubleValue());
+//						}
+//						value = double_arr;
+//					}
+//				}
+//			}else if(stmt.getType() instanceof Type.Record){
+//				Type.Record t = (Type.Record)stmt.getType();
+//				HashMap<String,Object> currentMap = (HashMap<String, Object>) value;
+//				HashMap<String,Object> newMap = new HashMap<>();
+//				//first value is type, second is variable name
+//				for(Pair<Type,String> p:t.getFields()){
+//					String key = p.second();
+//					//if type real ensure all values are double
+//					if(p.first() instanceof Type.Real){
+//						newMap.put(key,((Number)currentMap.get(key)).doubleValue());
+//					}else{
+//						newMap.put(key,currentMap.get(key));
+//					}
+//				}
+//				value = newMap;
+//			}
 		} else {
 			value = Collections.EMPTY_SET; // used to indicate a variable has
 											// been declared
@@ -463,9 +467,11 @@ public class Interpreter {
 	private Object checkEqual(Object lhs,Object rhs){
 		boolean equal = true;
 
-		if(lhs instanceof Number){
+		if(lhs instanceof Number){//for real and int type
 			return doNumberOperation(lhs,rhs, Expr.BOp.EQ);
-		}else if( lhs instanceof Expr.RecordConstructor){
+		}else if(lhs instanceof Boolean){//for Bool type
+			return lhs.equals(rhs);
+		}else if( lhs instanceof HashMap){
 			HashMap<String,Object> lhs_map = (HashMap<String, Object>)lhs;
 			HashMap<String,Object> rhs_map = (HashMap<String, Object>)rhs;
 			if(lhs_map.size() != rhs_map.size()){
@@ -509,9 +515,9 @@ public class Interpreter {
 					}
 				}
 			}
-		}else{
+		}else {
 			//error
-			return null;
+			return lhs.equals(rhs);
 		}
 		return equal;
 	}
