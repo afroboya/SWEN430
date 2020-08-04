@@ -25,6 +25,7 @@ import whilelang.util.SyntaxError.InternalFailure;
 @RunWith(Parameterized.class)
 public class ForEachValidTests {
 private static final String WHILE_SRC_DIR = "tests/valid/foreach/".replace('/', File.separatorChar);
+//private static final String WHILE_SRC_DIR = "tests/current/".replace('/', File.separatorChar);
 
 	private final String testName;
 
