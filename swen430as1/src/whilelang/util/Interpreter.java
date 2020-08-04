@@ -383,13 +383,13 @@ public class Interpreter {
 		}
 	}
 
-	private Object doNumberOperation(Object lhs, Object rhs, Expr.BOp expr){
+	private Object doNumberOperation(Object lhs, Object rhs,Expr.BOp operation){
 		Number lhs_number = (Number) lhs;
 		Number rhs_number = (Number) rhs;
 		if(lhs instanceof Double || rhs instanceof Double){
-			return doOperator(lhs_number.doubleValue(), rhs_number.doubleValue(), expr);
+			return doOperator(lhs_number.doubleValue(), rhs_number.doubleValue(), operation);
 		}else {
-			return doOperator(lhs_number.intValue(), rhs_number.intValue(), expr);
+			return doOperator(lhs_number.intValue(), rhs_number.intValue(), operation);
 		}
 	}
 
@@ -460,11 +460,11 @@ public class Interpreter {
 		return null;
 	}
 
-	private Object checkEqual(Object lhs,Object rhs,Expr.Binary expr){
+	private Object checkEqual(Object lhs,Object rhs){
 		boolean equal = true;
 
 		if(lhs instanceof Number){
-			return doNumberOperation(lhs,rhs,expr.getOp());
+			return doNumberOperation(lhs,rhs, Expr.BOp.EQ);
 		}else if( lhs instanceof Expr.RecordConstructor){
 			HashMap<String,Object> lhs_map = (HashMap<String, Object>)lhs;
 			HashMap<String,Object> rhs_map = (HashMap<String, Object>)rhs;
@@ -478,7 +478,7 @@ public class Interpreter {
 				//same size not empty
 				ArrayList<String> keys = new ArrayList<>(lhs_map.keySet());
 				for(String key:keys){
-					Object result = checkEqual(lhs_map.get(key),rhs_map.get(key),expr);
+					Object result = checkEqual(lhs_map.get(key),rhs_map.get(key));
 					if(result instanceof Boolean){
 						equal = (Boolean) result;
 					}
@@ -500,7 +500,7 @@ public class Interpreter {
 			}else{
 				//same size not empty
 				for(int i=0;i<lhs_array.size();i++){
-					Object result = checkEqual(lhs_array.get(i),rhs_array.get(i),expr);
+					Object result = checkEqual(lhs_array.get(i),rhs_array.get(i));
 					if(result instanceof Boolean){
 						equal = (Boolean) result;
 					}
@@ -509,6 +509,9 @@ public class Interpreter {
 					}
 				}
 			}
+		}else{
+			//error
+			return null;
 		}
 		return equal;
 	}
@@ -527,19 +530,16 @@ public class Interpreter {
 		// Second, deal the rest.
 		Object rhs = execute(expr.getRhs(), frame);
 
-//		if(lhs.getClass().equals( rhs.getClass())){
-//			throw new RuntimeException("classes did not match: "+ lhs.getClass()+"   and "+rhs.getClass()+  "EXPR: "+expr);
-//		}
 
-		Object returnVal = checkEqual(lhs,rhs,expr);
 
 		switch (expr.getOp()) {
 			case EQ:
-				return (Boolean)returnVal;
+				return (Boolean)checkEqual(lhs,rhs);
 			case NEQ:
-				return !(Boolean)returnVal;
+				return !(Boolean)checkEqual(lhs,rhs);
 		}
-		if(returnVal != null) {
+		Object returnVal = doNumberOperation(lhs,rhs,expr.getOp());
+		if(returnVal !=null) {
 			return returnVal;
 		}
 
