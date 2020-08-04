@@ -102,6 +102,8 @@ public class UnreachableCode {
 			return check((Stmt.IfElse) stmt);
 		} else if (stmt instanceof Stmt.For) {
 			return check((Stmt.For) stmt);
+		}else if (stmt instanceof Stmt.ForEach) {
+			return check((Stmt.ForEach) stmt);
 		} else if (stmt instanceof Stmt.While) {
 			return check((Stmt.While) stmt);
 		} else if (stmt instanceof Stmt.Switch) {
@@ -142,6 +144,11 @@ public class UnreachableCode {
 	}
 
 	public ControlFlow check(Stmt.For stmt) {
+		check(stmt.getBody());
+		return ControlFlow.NEXT;
+	}
+
+	public ControlFlow check(Stmt.ForEach stmt) {
 		check(stmt.getBody());
 		return ControlFlow.NEXT;
 	}

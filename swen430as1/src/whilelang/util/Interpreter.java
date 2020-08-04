@@ -20,7 +20,6 @@ package whilelang.util;
 
 import static whilelang.util.SyntaxError.internalFailure;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -119,7 +118,9 @@ public class Interpreter {
 			return execute((Stmt.Assign) stmt,frame);
 		} else if(stmt instanceof Stmt.For) {
 			return execute((Stmt.For) stmt,frame);
-		} else if(stmt instanceof Stmt.While) {
+		} else if(stmt instanceof Stmt.ForEach) {
+			return execute((Stmt.ForEach) stmt,frame);
+		}  else if(stmt instanceof Stmt.While) {
 			return execute((Stmt.While) stmt,frame);
 		} else if(stmt instanceof Stmt.Switch) {
 			return execute((Stmt.Switch) stmt,frame);
@@ -144,9 +145,6 @@ public class Interpreter {
 	private Object execute(Stmt.Assert stmt, HashMap<String,Object> frame) {
 		boolean b = (Boolean) execute(stmt.getExpr(),frame);
 		if(!b) {
-			System.out.println("key: "+stmt.getExpr().toString());
-			System.out.println("key: "+stmt);
-			System.out.println("key: "+stmt.toString());
 			throw new RuntimeException("assertion failure");
 		}
 		return null;
@@ -195,6 +193,51 @@ public class Interpreter {
 			}
 			execute(stmt.getIncrement(),frame);
 		}
+		return null;
+	}
+
+	private Object execute(Stmt.ForEach stmt, HashMap<String,Object> frame) {
+		execute(stmt.getDeclaration(),frame);
+		Expr expr = stmt.getCollection_values();
+		Object collection = execute(expr,frame);
+		if(collection instanceof List){
+			List list = (List)collection;
+			for(int i=0;i<list.size();i++){
+				frame.put(stmt.getDeclaration().getName(),list.get(i));
+				Object ret = execute(stmt.getBody(),frame);
+				if(ret == BREAK_CONSTANT) {
+					break;
+				} else if(ret == CONTINUE_CONSTANT) {
+					// continue :)
+				} else if(ret != null) {
+					return ret;
+				}
+			}
+		}
+
+//		ArrayList<Integer> collection_values = (ArrayList<Integer>)frame.get();
+//		if(collection_values instanceof Iterable){
+//			Iterable c = (Iterable) collection_values;
+//			for(Object a:c){
+//				System.out.println(a);
+//			}
+//		}
+
+//		if(stmt.getCollection_values() instanceof Type.Array){
+//			System.out.println("type array");
+//		}
+//		for(Object o:stmt.getCollection_values())
+//		while((Boolean) execute(stmt.getCondition(),frame)) {
+//			Object ret = execute(stmt.getBody(),frame);
+//			if(ret == BREAK_CONSTANT) {
+//				break;
+//			} else if(ret == CONTINUE_CONSTANT) {
+//				// continue :)
+//			} else if(ret != null) {
+//				return ret;
+//			}
+//			execute(stmt.getIncrement(),frame);
+//		}
 		return null;
 	}
 
@@ -258,30 +301,10 @@ public class Interpreter {
 
 	private Object execute(Stmt.VariableDeclaration stmt,
 			HashMap<String, Object> frame) {
-		System.out.println("stmt: "+stmt);
 		Expr re = stmt.getExpr();
 		Object value;
 		if (re != null) {
 			value = execute(re, frame);
-//			System.out.println(stmt.getExpr().toString());
-//			//ensure that integer is converted to double
-//			if(stmt.getType().toString().equals("real[]")){
-//				//convert everything to double
-//				ArrayList<Double> double_arr = new ArrayList<>();
-//				if(value instanceof ArrayList){
-//					ArrayList a = (ArrayList)value;
-//					for(Object val:a){
-//						double_arr.add(((Number)val).doubleValue());
-//					}
-//				}
-//				value = double_arr;
-//			}else if(stmt.getType().toString().equals("real")){
-//				if(value instanceof Integer){
-//					value = ((Integer)value).doubleValue();
-//				}
-//			}else if(stmt.getType() instanceof Type.Record){
-//
-//			}
 
 			if(stmt.getType() instanceof Type.Real){
 				if(value instanceof Integer){
@@ -290,7 +313,7 @@ public class Interpreter {
 			}else if(stmt.getType() instanceof Type.Array){
 				if(value instanceof ArrayList){
 					ArrayList value_array = (ArrayList)value;
-					if(value_array.get(0) instanceof Number) {
+					if(!value_array.isEmpty() && value_array.get(0) instanceof Number) {
 						ArrayList<Double> double_arr = new ArrayList<>();
 						for (Object val : value_array) {
 							double_arr.add(((Number) val).doubleValue());
@@ -360,14 +383,24 @@ public class Interpreter {
 		}
 	}
 
-	private Object doOperator(Number lhs,Number rhs,Expr.Binary expr){
+	private Object doNumberOperation(Object lhs, Object rhs, Expr.BOp expr){
+		Number lhs_number = (Number) lhs;
+		Number rhs_number = (Number) rhs;
+		if(lhs instanceof Double || rhs instanceof Double){
+			return doOperator(lhs_number.doubleValue(), rhs_number.doubleValue(), expr);
+		}else {
+			return doOperator(lhs_number.intValue(), rhs_number.intValue(), expr);
+		}
+	}
+
+	private Object doOperator(Number lhs, Number rhs, Expr.BOp expr){
 		//Assume both are of same class
 		boolean isDouble = false;
 		if(lhs instanceof Double){
 			isDouble = true;
 		}
 
-		switch (expr.getOp()) {
+		switch (expr) {
 			case ADD:
 				if(isDouble){
 					return ((Double)lhs) + ((Double)rhs);
@@ -426,34 +459,12 @@ public class Interpreter {
 		}
 		return null;
 	}
-	private Object execute(Expr.Binary expr, HashMap<String,Object> frame) {
-		// First, deal with the short-circuiting operators first
-		Object lhs = execute(expr.getLhs(), frame);
 
-		switch (expr.getOp()) {
-		case AND:
-			return ((Boolean)lhs) && ((Boolean)execute(expr.getRhs(), frame));
-		case OR:
-			return ((Boolean)lhs) || ((Boolean)execute(expr.getRhs(), frame));
-		}
-
-		// Second, deal the rest.
-		Object rhs = execute(expr.getRhs(), frame);
-
-//		if(lhs.getClass().equals( rhs.getClass())){
-//			throw new RuntimeException("classes did not match: "+ lhs.getClass()+"   and "+rhs.getClass()+  "EXPR: "+expr);
-//		}
-
+	private Object checkEqual(Object lhs,Object rhs,Expr.Binary expr){
 		boolean equal = true;
 
 		if(lhs instanceof Number){
-			Number lhs_number = (Number) lhs;
-			Number rhs_number = (Number) rhs;
-			if(lhs instanceof Double || rhs instanceof Double){
-				return doOperator(lhs_number.doubleValue(), rhs_number.doubleValue(), expr);
-			}else {
-				return doOperator(lhs_number.intValue(), rhs_number.intValue(), expr);
-			}
+			return doNumberOperation(lhs,rhs,expr.getOp());
 		}else if( lhs instanceof Expr.RecordConstructor){
 			HashMap<String,Object> lhs_map = (HashMap<String, Object>)lhs;
 			HashMap<String,Object> rhs_map = (HashMap<String, Object>)rhs;
@@ -467,7 +478,7 @@ public class Interpreter {
 				//same size not empty
 				ArrayList<String> keys = new ArrayList<>(lhs_map.keySet());
 				for(String key:keys){
-					Object result = doOperator((Number)lhs_map.get(key),(Number)rhs_map.get(key),expr);
+					Object result = checkEqual(lhs_map.get(key),rhs_map.get(key),expr);
 					if(result instanceof Boolean){
 						equal = (Boolean) result;
 					}
@@ -489,7 +500,7 @@ public class Interpreter {
 			}else{
 				//same size not empty
 				for(int i=0;i<lhs_array.size();i++){
-					Object result = doOperator((Number)lhs_array.get(i),(Number)rhs_array.get(i),expr);
+					Object result = checkEqual(lhs_array.get(i),rhs_array.get(i),expr);
 					if(result instanceof Boolean){
 						equal = (Boolean) result;
 					}
@@ -499,23 +510,46 @@ public class Interpreter {
 				}
 			}
 		}
+		return equal;
+	}
+
+	private Object execute(Expr.Binary expr, HashMap<String,Object> frame) {
+		// First, deal with the short-circuiting operators first
+		Object lhs = execute(expr.getLhs(), frame);
+
+		switch (expr.getOp()) {
+		case AND:
+			return ((Boolean)lhs) && ((Boolean)execute(expr.getRhs(), frame));
+		case OR:
+			return ((Boolean)lhs) || ((Boolean)execute(expr.getRhs(), frame));
+		}
+
+		// Second, deal the rest.
+		Object rhs = execute(expr.getRhs(), frame);
+
+//		if(lhs.getClass().equals( rhs.getClass())){
+//			throw new RuntimeException("classes did not match: "+ lhs.getClass()+"   and "+rhs.getClass()+  "EXPR: "+expr);
+//		}
+
+		Object returnVal = checkEqual(lhs,rhs,expr);
 
 		switch (expr.getOp()) {
 			case EQ:
-				return equal;
+				return (Boolean)returnVal;
 			case NEQ:
-				return !equal;
+				return !(Boolean)returnVal;
+		}
+		if(returnVal != null) {
+			return returnVal;
 		}
 
-
-
-
-		//my method
 
 		internalFailure("unknown binary expression encountered (" + expr + ")",
 				file.filename, expr);
 		return null;
 	}
+
+
 
 
 	private Object execute(Expr.Literal expr, HashMap<String,Object> frame) {

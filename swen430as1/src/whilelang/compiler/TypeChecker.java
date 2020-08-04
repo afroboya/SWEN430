@@ -117,6 +117,8 @@ public class TypeChecker {
 			check((Stmt.IfElse) stmt, environment);
 		} else if(stmt instanceof Stmt.For) {
 			check((Stmt.For) stmt, environment);
+		} else if(stmt instanceof Stmt.ForEach) {
+			check((Stmt.ForEach) stmt, environment);
 		} else if(stmt instanceof Stmt.While) {
 			check((Stmt.While) stmt, environment);
 		} else if(stmt instanceof Stmt.Switch) {
@@ -189,6 +191,22 @@ public class TypeChecker {
 		// Make sure condition has bool type
 		checkInstanceOf(ct,stmt.getCondition(),Type.Bool.class);
 		check(stmt.getIncrement(),environment);
+		check(stmt.getBody(),environment);
+	}
+
+	public void check(Stmt.ForEach stmt, Map<String,Type> environment) {
+
+		Stmt.VariableDeclaration vd = stmt.getDeclaration();
+		check(vd,environment);
+
+		// Clone the environment in order that the loop variable is only scoped
+		// for the life of the loop itself.
+		environment = new HashMap<String,Type>(environment);
+		environment.put(vd.getName(), vd.getType());
+
+		Type ct = check(stmt.getCollection_values(),environment);
+		// Make sure values has bool type
+		checkInstanceOf(ct,stmt.getCollection_values(),Type.Array.class);
 		check(stmt.getBody(),environment);
 	}
 
@@ -452,7 +470,7 @@ public class TypeChecker {
 	 * Check that a given type t2 is an instance of of another type t1. This
 	 * method is useful for checking that a type is, for example, a List type.
 	 *
-	 * @param t1
+	 * @param type
 	 * @param type
 	 * @param element
 	 *            Used for determining where to report syntax errors.
@@ -628,7 +646,7 @@ public class TypeChecker {
 	 * cannot be used in certain situations.
 	 *
 	 * @param t
-	 * @param elemt
+	 * @param elem
 	 */
 	public void checkNotVoid(Type t, SyntacticElement elem) {
 		if(t instanceof Type.Void) {

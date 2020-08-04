@@ -98,7 +98,7 @@ public class DefiniteAssignment {
 	 * assigned. Furthermore, update the set of definitely assigned variables to
 	 * include any which are definitely assigned after this statement.
 	 *
-	 * @param statement
+	 * @param stmt
 	 *            The statement to check.
 	 * @param environment
 	 *            The set of variables which are definitely assigned.
@@ -125,7 +125,9 @@ public class DefiniteAssignment {
 			return check((Stmt.IfElse) stmt, environment);
 		} else if (stmt instanceof Stmt.For) {
 			return check((Stmt.For) stmt, environment);
-		} else if (stmt instanceof Stmt.While) {
+		} else if (stmt instanceof Stmt.ForEach) {
+			return check((Stmt.ForEach) stmt, environment);
+		}else if (stmt instanceof Stmt.While) {
 			return check((Stmt.While) stmt, environment);
 		} else if (stmt instanceof Stmt.Switch) {
 			return check((Stmt.Switch) stmt, environment);
@@ -198,6 +200,23 @@ public class DefiniteAssignment {
 		check(stmt.getBody(), loop.nextEnvironment);
 		//
 		return new ControlFlow(environment,null);
+	}
+
+	public ControlFlow check(Stmt.ForEach stmt, Defs enter_environment) {
+		String variable_name = stmt.getDeclaration().getName();
+
+		ControlFlow loop = new ControlFlow(enter_environment,null);
+		check(stmt.getCollection_values(), loop.nextEnvironment);
+		//manually add forloop variable to enviroment
+		if(loop.nextEnvironment.contains(variable_name)) {
+			syntaxError("variable already declared: " + variable_name, file.filename, stmt);
+		}
+
+		loop = new ControlFlow(loop.nextEnvironment.add(variable_name),null);
+		check(stmt.getBody(), loop.nextEnvironment);
+
+		//
+		return new ControlFlow(enter_environment,null);
 	}
 
 	public ControlFlow check(Stmt.While stmt, Defs environment) {

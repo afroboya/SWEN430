@@ -482,6 +482,106 @@ public interface Stmt extends SyntacticElement {
 	}
 
 	/**
+	 * Represents a classical for statement made up from a <i>variable
+	 * declaration</i>, a <i>loop condition</i> and an <i>increment
+	 * statement</i>. The following illustrates:
+	 *
+	 * <pre>
+	 * int sum([int] xs) {
+	 *   int r = 0;
+	 *   for(int i=0;i<|xs|;i=i+1) {
+	 *     r = r + xs[i];
+	 *   }
+	 *   return r;
+	 * }
+	 * </pre>
+	 *
+	 * Observe that the variable declaration does not need to supply an
+	 * initialiser expression. Furthermore, like C and Java, the variable
+	 * declaration, condition and increment statements are all optional. Thus,
+	 * we can safely rewrite the above as follows:
+	 *
+	 * <pre>
+	 * int sum([int] xs) {
+	 *   int r = 0;
+	 *   for(int i=0;i<|xs|;) {
+	 *     r = r + xs[i];
+	 *   }
+	 *   return r;
+	 * }
+	 * </pre>
+	 *
+	 * @author David J. Pearce
+	 *
+	 */
+	public static final class ForEach extends SyntacticElement.Impl implements Stmt {
+
+
+		private final VariableDeclaration declaration;
+		//array is likely not correct as we could have variable which contains values :(
+		private final Expr collection_values;
+
+		/**
+		 * A sequence of zero or more statements making up the loop body.
+		 */
+		private final ArrayList<Stmt> body;
+
+		/**
+		 * Construct a for loop from a given declaration, condition and
+		 * increment. Note that the declaration, conditional and increment are
+		 * all optional.
+		 *
+		 * @param declaration
+		 *            An variable declation, which may be null.
+		 * @param collection_values
+		 *            A list of values
+		 * @param body
+		 *            A list of zero or more statements, which may not be null.
+		 * @param attributes
+		 */
+		public ForEach(VariableDeclaration declaration, Expr collection_values,
+				   Collection<Stmt> body, Attribute... attributes) {
+			super(attributes);
+			this.declaration = declaration;
+			this.collection_values = collection_values;
+			this.body = new ArrayList<Stmt>(body);
+		}
+
+
+		public ForEach(VariableDeclaration declaration, Expr collection_values,
+				   Collection<Stmt> body, Collection<Attribute> attributes) {
+			super(attributes);
+			this.declaration = declaration;
+			this.collection_values = collection_values;
+			this.body = new ArrayList<Stmt>(body);
+		}
+
+		/**
+		 * Get the variable declaration for this loop.
+		 *
+		 * @return May be null.
+		 */
+		public VariableDeclaration getDeclaration() {
+			return declaration;
+		}
+
+
+		/**
+		 * Get the loop body.
+		 *
+		 * @return May not be null.
+		 */
+		public ArrayList<Stmt> getBody() {
+			return body;
+		}
+
+		public Expr getCollection_values() {
+			return collection_values;
+		}
+	}
+
+
+	/**
 	 * Represents a classical if-else statement, made up from a
 	 * <i>condition</i>, <i>true branch</i> and <i>false branch</i>.
 	 * The following illustrates:

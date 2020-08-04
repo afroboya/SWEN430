@@ -463,15 +463,48 @@ public class Parser {
 		matchKeyword("for");
 		match("(");
 		Stmt.VariableDeclaration declaration = parseVariableDeclaration(context);
-		match(";");
-		Expr condition = parseExpr(context);
-		match(";");
-		Stmt increment = parseUnitStatement(context);
-		int end = index;
-		match(")");
-		List<Stmt> blk = parseStatementBlock(context.setInLoop().clone());
+		Token t = tokens.get(index);
+		index = index + 1;
+		if (t.text.equals(";")) {
+			Expr condition = parseExpr(context);
+			match(";");
+			Stmt increment = parseUnitStatement(context);
+			int end = index;
+			match(")");
+			List<Stmt> blk = parseStatementBlock(context.setInLoop().clone());
+			return new Stmt.For(declaration, condition, increment, blk, sourceAttr(start, end - 1));
+		}else if(t.text.equals(":")){
+			if(declaration.getExpr() !=null){
+				//fail -> should not be able to assign value
+				syntaxError("expr "+declaration+" should not have value",declaration.getExpr());
+			}
+			Expr values = null;
+			int curIndex = index;
+			for(int i=0;i<3;i++) {
+				try {
+					if (i == 0) {
+						values = parseVariable(context);
+						break;
+					} else if (i==1){
+						values = parseArrayInitialiserOrGeneratorExpr(context);
+						break;
+					}else if(i==2){
+						values = parseInvokeExprOrStmt(context);
+						break;
+					}
+				} catch (SyntaxError s) {
+					//reset index and try again
+					index = curIndex;
+				}
+			}
 
-		return new Stmt.For(declaration, condition, increment, blk, sourceAttr(start, end - 1));
+			int end = index;
+			match(")");
+			List<Stmt> blk = parseStatementBlock(context.setInLoop().clone());
+			return new Stmt.ForEach(declaration, values, blk, sourceAttr(start, end - 1));
+		}
+		syntaxError("expecting ';' or ':', found '" + t.text + "'", t);
+		return null;
 	}
 
 	/**
