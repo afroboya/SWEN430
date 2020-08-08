@@ -129,6 +129,8 @@ public class DefiniteAssignment {
 			return check((Stmt.ForEach) stmt, environment);
 		}else if (stmt instanceof Stmt.While) {
 			return check((Stmt.While) stmt, environment);
+		}else if (stmt instanceof Stmt.DoWhile) {
+			return check((Stmt.DoWhile) stmt, environment);
 		} else if (stmt instanceof Stmt.Switch) {
 			return check((Stmt.Switch) stmt, environment);
 		} else {
@@ -225,6 +227,13 @@ public class DefiniteAssignment {
 		check(stmt.getBody(), environment);
 		//
 		return new ControlFlow(environment,null);
+	}
+	public ControlFlow check(Stmt.DoWhile stmt, Defs environment) {
+		ControlFlow new_control_flow = check(stmt.getBody(), environment);
+		check(stmt.getCondition(), new_control_flow.nextEnvironment);
+		//can consider variables definitely assigned as body runs at least once
+		return new_control_flow;
+
 	}
 
 	public ControlFlow check(Stmt.Switch stmt, Defs environment) {

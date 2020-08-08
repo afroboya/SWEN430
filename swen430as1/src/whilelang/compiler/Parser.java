@@ -216,7 +216,9 @@ public class Parser {
 			return parseIfStmt(context);
 		} else if (token.text.equals("while")) {
 			return parseWhileStmt(context);
-		} else if (token.text.equals("for")) {
+		} else if (token.text.equals("do")) {
+			return parseDoWhileStmt(context);
+		}  else if (token.text.equals("for")) {
 			return parseForStmt(context);
 		} else if (token.text.equals("switch")) {
 			return parseSwitchStmt(context);
@@ -447,6 +449,29 @@ public class Parser {
 		int end = index;
 		List<Stmt> blk = parseStatementBlock(context.setInLoop().clone());
 		return new Stmt.While(condition, blk, sourceAttr(start, end - 1));
+	}
+
+	/**
+	 * Parse a DoWhile statement of the form:
+	 *
+	 * <pre>
+	 * DoWhileStmt ::= 'do' StmtBlock 'while' '(' Expr ');'
+	 * </pre>
+	 *
+	 * @return
+	 */
+	private Stmt parseDoWhileStmt(Context context) {
+		int start = index;
+		matchKeyword("do");
+		List<Stmt> blk = parseStatementBlock(context.setInLoop().clone());
+		matchKeyword("while");
+		match("(");
+		Expr condition = parseExpr(context);
+		match(")");
+		match(";");
+		int end = index;
+
+		return new Stmt.DoWhile(condition, blk, sourceAttr(start, end - 1));
 	}
 
 	/**

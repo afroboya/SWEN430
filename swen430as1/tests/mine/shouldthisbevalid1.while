@@ -1,0 +1,7 @@
+void main() {
+    int r;
+    if(true){
+        R = 1;
+    }
+    return r;
+}
