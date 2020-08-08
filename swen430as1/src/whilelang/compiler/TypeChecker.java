@@ -205,8 +205,23 @@ public class TypeChecker {
 		environment.put(vd.getName(), vd.getType());
 
 		Type ct = check(stmt.getCollection_values(),environment);
-		// Make sure values has bool type
+		// Make sure values has Array type
 		checkInstanceOf(ct,stmt.getCollection_values(),Type.Array.class);
+		//make sure variable declaration type is same as type of values collection holds
+		if(ct instanceof Type.Array){
+			Type arrElementType = ((Type.Array)ct).getElement();
+			Type variableType = vd.getType();
+
+			if(isSubtype(variableType,arrElementType,((Type.Array) ct).getElement())){
+				System.out.println("same type!");
+			}else{
+				syntaxError("Variable type "+variableType+" does not match collection element type: "+arrElementType, file.filename,ct);
+			}
+		}else{
+			syntaxError("Collection is not an array", file.filename,ct);
+		}
+
+
 		check(stmt.getBody(),environment);
 	}
 

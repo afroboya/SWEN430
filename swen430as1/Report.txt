@@ -1,0 +1,17 @@
+Kian Foulkes
+SWEN430
+Assignment One
+
+Real - Completed
+
+The hardest part about this was that Int is a subtype. Initially I tried converting any int that was assigned to a real to a double.
+However this became particularly difficult when assigning variables and within arrays.
+I instead choose to handle that case when comparing, doing operations etc.
+
+ForEach - Completed
+The hardest part about this was ignoring that the variable needed to be assigned, as we know for the loop to run that it will be assigned.
+Initially I tried assigning a dummy value, but this only worked if the dummy value matched with the expected type. Instead I do a specialty check if it is a for-loop
+
+I had trouble with: ForEach_Valid_6.while
+
+As this not actually valid, the variable xs is of type int[] and iterates over a collection of int[]. I made some of my own tests for this case.
