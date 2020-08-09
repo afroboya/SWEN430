@@ -24,10 +24,5 @@ doWhile - Completed
 ###################
 
 This one was not to difficult, however I duplicated the while class and renamed it, unfortunately I forgot it would also rename any instance where while was called.
-So my doWhile methods were not being called. I was also confused as to why doWhile_Invalid_2.while was invalid. I assume we are not allowed break statements?
-
-do {
-      i = i + 1;
-      if(i == 10) { break; }
-      r = i;
-  } while(i < |items|);
+So my doWhile methods were not being called. I was also confused as to why doWhile_Invalid_2.while was invalid. However I eventually figured out it was because r was not assigned.
+I created my own test that double checked breaking out worked, when it was put as the last statement(so everything else was definitely assigned)

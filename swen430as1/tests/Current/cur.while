@@ -4,6 +4,7 @@ int f(int[] items) {
   do {
       i = i + 1;
       r = i;
+      if(i == 2) { break; }
   } while(i < |items|);
 
   return r;
@@ -11,6 +12,6 @@ int f(int[] items) {
 
 void main() {
     assert f([1]) == 1;
-    assert f([1,2,3]) == 3;
+    assert f([1,2,3]) == 2;
     assert f([-1]) == 1;
 }

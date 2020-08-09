@@ -4,13 +4,14 @@ int f(int[] items) {
   do {
       i = i + 1;
       r = i;
-  } while(r < |items|);
+      if(i == 2) { break; }
+  } while(i < |items|);
 
   return r;
 }
 
 void main() {
     assert f([1]) == 1;
-    assert f([1,2,3]) == 3;
+    assert f([1,2,3]) == 2;
     assert f([-1]) == 1;
 }

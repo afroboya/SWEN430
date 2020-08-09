@@ -1,7 +1,13 @@
-void main() {
+
+int f(){
     int r;
     if(true){
-        R = 1;
+        r = 1;
     }
     return r;
+    }
+
+
+void main() {
+    int a = f();
 }
