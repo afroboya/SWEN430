@@ -25,4 +25,12 @@ doWhile - Completed
 
 This one was not to difficult, however I duplicated the while class and renamed it, unfortunately I forgot it would also rename any instance where while was called.
 So my doWhile methods were not being called. I was also confused as to why doWhile_Invalid_2.while was invalid. However I eventually figured out it was because r was not assigned.
-I created my own test that double checked breaking out worked, when it was put as the last statement(so everything else was definitely assigned)
+I created a few tests, primarily double checking breaking out worked, when it was put as the last statement(so everything else was definitely assigned)
+
+
+###################
+TryCatch - Completed
+###################
+
+This one was easily the most difficult. The try catch aspect itself wasn't as hard as catching java errors and understanding what the error code represented. I am still unsure how to tell the difference
+between // negative length exception and // assertion failure, as they both produce assertion failures. I still do not understand if the "code" was randomly assigned. I looked a whiley documentation but could not see anything about exceptions and codes

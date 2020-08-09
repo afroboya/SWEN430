@@ -1,0 +1,14 @@
+int f(){
+    int i;
+    try {
+    i=0;
+    assert true;
+    } catch(int x) {
+    assert false;
+    }
+    return i;
+}
+
+void main() {
+    int a = f();
+}

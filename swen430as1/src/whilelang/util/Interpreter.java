@@ -294,52 +294,67 @@ public class Interpreter {
 			condition = execute(stmt.getTry_body(), frame);
 			//FIXME what if no try, how does it continue
 		}catch (Exception e) {
+			boolean isJavaError = false;
+			Object value = null;
+			Type exception_val_type = null;
+			Expr expr = null;
+
 			if (e instanceof myException) {
 				myException exception = (myException) e;
-				Object exception_expr_value = exception.getEvaluatedVal();
-				TypeChecker checker = new TypeChecker();
-				Type exception_val_type = exception.getErr().getType();
-
+				value = exception.getEvaluatedVal();
+				exception_val_type = exception.getErr().getType();
+				expr = exception.getErr().getExpr();
 				//List so catch statements will be evaulated in order
 				//TODO check if any catch statements are the same, as it will be dead code.
-				for(Stmt.Catch v:stmt.getCatchs()){
-					Type t = v.getCaught_var().getType();
-					if(t instanceof Type.Named){
-						Type.Named named = (Type.Named) t;
-						WhileFile.Decl s = this.declarations.get(named.getName());
-						if(s instanceof WhileFile.TypeDecl){
-							WhileFile.TypeDecl dec = (WhileFile.TypeDecl)s;
-							t = dec.getType();
-						}
-
-					}
-
-					if(checker.isSubtype(t,exception_val_type,exception.getErr().getExpr())){
-						//assign catch variable a value
-						//execute catch block
-						//return
-						frame.put(v.getCaught_var().getName(),exception_expr_value);
-						return execute(v.getCatch_body(),frame);
-					}
-				}
-
-				//None of the catch blocks matched, rethrow error
-				throw e;
 			} else {
-				//FIXME catch error and rethrow with code
-//				String message = e.getMessage();
-//				if(message.equals("assertion failure")){
-//
-//				}
-//
-//				String emessage1 = e.getLocalizedMessage();
-//				Throwable ethrowable = e.getCause();
+				isJavaError = true;
 
-				//probably some other error thats my fault
-				throw e;
+				String message = e.getMessage();
+				if(message.startsWith("/ by zero")){
+					value = 0;
+				}else if(message.startsWith("Index")){
+					value = 1;
+				}else if(message.equals("negative length exception")){
+					value = 2;
+				}else if(message.equals("assertion failure")){
+					value = 3;
+				}
 			}
 
+			if(value != null) {
+				for (Stmt.Catch v : stmt.getCatchs()) {
+					Type t = v.getCaught_var().getType();
+					if (t instanceof Type.Named) {
+						Type.Named named = (Type.Named) t;
+						WhileFile.Decl s = this.declarations.get(named.getName());
+						if (s instanceof WhileFile.TypeDecl) {
+							WhileFile.TypeDecl dec = (WhileFile.TypeDecl) s;
+							t = dec.getType();
+						}
+					}
+					TypeChecker checker = new TypeChecker();
+					if (isJavaError && t instanceof Type.Record) {
+						//convert value to record in form given
+						ArrayList<Pair<String, Expr>> exprs = new ArrayList<Pair<String, Expr>>();
+						Type.Record trecord = (Type.Record) t;
+						exprs.add(new Pair<String, Expr>(trecord.getFields().get(0).second(), new Expr.Literal(value)));
+						Expr.RecordConstructor rc = new Expr.RecordConstructor(exprs);
+						Stmt.Assign ass = new Stmt.Assign(new Expr.Variable(v.getCaught_var().getName()), rc);
+						v.getCatch_body().add(0, ass);
+						return execute(v.getCatch_body(), frame);
+					} else if (!isJavaError && checker.isSubtype(t, exception_val_type, expr)) {
+						frame.put(v.getCaught_var().getName(), value);
+						return execute(v.getCatch_body(), frame);
+					}
+				}
+			}
+			throw e;
+			//Run catch code
+			//it is expected that frame has been updated
+
+
 		}
+		//no error thrown
 		return null;
 	}
 

@@ -5,9 +5,11 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 import whilelang.ast.WhileFile;
+import whilelang.compiler.Lexer;
+import whilelang.compiler.Parser;
 import whilelang.compiler.WhileCompiler;
-import whilelang.util.Interpreter;
 import whilelang.util.SyntaxError;
+import whilelang.util.SyntaxError.InternalFailure;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,13 +18,15 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 
+import static org.junit.Assert.fail;
+
 @RunWith(Parameterized.class)
-public class mineTests {
-	private static final String WHILE_SRC_DIR = "tests/mine/".replace('/', File.separatorChar);
+public class MyInvalidTests {
+private static final String WHILE_SRC_DIR = "tests/mine/invalid/".replace('/', File.separatorChar);
 
 	private final String testName;
 
-	public mineTests(String testName) {
+	public MyInvalidTests(String testName) {
 		this.testName = testName;
 	}
 
@@ -63,13 +67,24 @@ public class mineTests {
 	 * @throws IOException
 	 */
 	private void runTest(String testname) throws IOException {
+		File srcFile = new File(WHILE_SRC_DIR + testname + ".while");
+		// First, lex and parse the input file. If any errors occur here then
+		// they are genuine errors.
+		Lexer lexer = new Lexer(srcFile.getPath());
+		Parser parser = new Parser(srcFile.getPath(), lexer.scan());
+
+		// Second, run type checker over the AST. We expect every test to
+		// throw an error here. So, tests which do should pass, tests which
+		// don't should fail.
 		try {
 			WhileCompiler compiler = new WhileCompiler(WHILE_SRC_DIR + testname + ".while");
 			WhileFile ast = compiler.compile();
-			new Interpreter().run(ast);
-		} catch (SyntaxError e) {
-			e.outputSourceError(System.err);
+			fail();
+		} catch (InternalFailure e) {
 			throw e;
+		} catch (SyntaxError e) {
+			// Success!
+			e.outputSourceError(System.err);
 		}
 	}
 }

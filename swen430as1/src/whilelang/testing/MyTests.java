@@ -19,7 +19,7 @@ import whilelang.util.SyntaxError;
 
 @RunWith(Parameterized.class)
 public class MyTests {
-  private static final String WHILE_SRC_DIR = "tests/Current/".replace('/', File.separatorChar);
+  private static final String WHILE_SRC_DIR = "tests/mine/valid/".replace('/', File.separatorChar);
   private final String testName;
 
   public MyTests(String testName) {
