@@ -222,7 +222,9 @@ public class Parser {
 			return parseForStmt(context);
 		} else if (token.text.equals("switch")) {
 			return parseSwitchStmt(context);
-		} else {
+		}else if (token.text.equals("try")) {
+			return parseTryStmt(context);
+		}  else {
 			Stmt stmt = parseUnitStatement(context);
 			match(";");
 			return stmt;
@@ -243,7 +245,9 @@ public class Parser {
 			return parseAssertStmt(context);
 		} else if (token.text.equals("return")) {
 			return parseReturnStmt(context);
-		} else if (token.text.equals("break")) {
+		} else if (token.text.equals("throw")) {
+			return parseThrowStmt(context);
+		}else if (token.text.equals("break")) {
 			return parseBreakStmt(context);
 		} else if (token.text.equals("continue")) {
 			return parseContinueStmt(context);
@@ -371,6 +375,7 @@ public class Parser {
 		return new Stmt.VariableDeclaration(type, id.text, initialiser, sourceAttr(start, index - 1));
 	}
 
+
 	/**
 	 * Parse an if statement, of the form:
 	 *
@@ -429,6 +434,17 @@ public class Parser {
 		}
 		// Done.
 		return new Stmt.Return(e, sourceAttr(start, index - 1));
+	}
+
+	private Stmt.Throw parseThrowStmt(Context context) {
+		int start = index;
+		// Every return statement begins with the return keyword!
+		matchKeyword("throw");
+		// A return statement may optionally have a return expression.
+		Expr e = parseExpr(context);
+
+		// Done.
+		return new Stmt.Throw(e, sourceAttr(start, index - 1));
 	}
 
 	/**
@@ -557,6 +573,45 @@ public class Parser {
 		match("}");
 
 		return new Stmt.Switch(expr, cases, sourceAttr(start, end - 1));
+	}
+
+	private Stmt parseTryStmt(Context context) {
+		int start = index;
+		matchKeyword("try");
+		List<Stmt> try_body = parseStatementBlock(context.setInLoop().clone());
+		Token lookahead = tokens.get(index);
+		List<Stmt.Catch> catchStmts = new ArrayList<>();
+		ArrayList<String> varToAddToContext = new ArrayList<>();
+		Context preCatchStatementsContext = context.clone();
+		while (lookahead.text.equals("catch")) {
+			match("catch");
+			match("(");
+
+
+			//Get variable
+			int start_var = index;
+			Type type = parseType();
+			Identifier id = matchIdentifier();
+			if(preCatchStatementsContext.isDeclared(id.text)) {
+				syntaxError("variable " + id.text + " alread declared",id);
+			} else {
+				context.declare(id.text);
+			}
+			Stmt.VariableDeclaration catch_variable =  new Stmt.VariableDeclaration(type, id.text, null, sourceAttr(start_var, index - 1));
+
+			match(")");
+			List<Stmt> catch_body = parseStatementBlock(context.setInLoop().clone());
+			Stmt.Catch c = new Stmt.Catch(catch_variable,catch_body);
+			catchStmts.add(c);
+			//should never be end of file
+			checkNotEof();
+			lookahead = tokens.get(index);
+		}
+
+		return new Stmt.TryCatch(try_body, catchStmts, sourceAttr(start, index - 1));
+
+//		syntaxError("expecting ';' or ':', found some other stuff :(((");
+//		return null;
 	}
 
 	private Stmt parseBreakStmt(Context context) {

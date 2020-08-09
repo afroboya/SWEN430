@@ -95,6 +95,8 @@ public class UnreachableCode {
 				   stmt instanceof Stmt.Return) {
 			// Also easy cases
 			return ControlFlow.RETURN;
+		}else if(stmt instanceof Stmt.Throw){
+			return ControlFlow.THROW;
 		} else if (stmt instanceof Stmt.Break) {
 			// Also easy cases
 			return ControlFlow.BREAK;
@@ -102,6 +104,8 @@ public class UnreachableCode {
 			return check((Stmt.IfElse) stmt);
 		} else if (stmt instanceof Stmt.For) {
 			return check((Stmt.For) stmt);
+		}else if (stmt instanceof Stmt.TryCatch) {
+			return check((Stmt.TryCatch) stmt);
 		}else if (stmt instanceof Stmt.ForEach) {
 			return check((Stmt.ForEach) stmt);
 		} else if (stmt instanceof Stmt.While) {
@@ -149,6 +153,12 @@ public class UnreachableCode {
 		check(stmt.getBody());
 		return ControlFlow.NEXT;
 	}
+	//FIXME its possible we use the THROW here and check if THROW exists within control flow
+	public ControlFlow check(Stmt.TryCatch stmt) {
+		check(stmt.getTry_body());
+		//check(stmt.getCatch_body());//this code will only be reached if we have some sort of exception.. how can we know if were about to get an exception?
+		return ControlFlow.NEXT;
+	}
 
 	public ControlFlow check(Stmt.ForEach stmt) {
 		check(stmt.getBody());
@@ -175,9 +185,9 @@ public class UnreachableCode {
 	private ControlFlow join(ControlFlow left, ControlFlow right, SyntacticElement element) {
 		if(left == right) {
 			return left;
-		} else if(left == ControlFlow.RETURN) {
+		} else if(left == ControlFlow.RETURN||left == ControlFlow.THROW) {
 			return right; // BREAK or NEXT
-		} else if(right == ControlFlow.RETURN) {
+		} else if(right == ControlFlow.RETURN||right == ControlFlow.THROW) {
 			return left; // BREAK or NEXT
 		} else if(left == ControlFlow.BREAKNEXT || right == ControlFlow.BREAKNEXT) {
 			return ControlFlow.BREAKNEXT;
@@ -193,7 +203,7 @@ public class UnreachableCode {
 		}
 	}
 
-	private enum ControlFlow { NEXT, RETURN, BREAK, BREAKNEXT };
+	private enum ControlFlow { NEXT, RETURN, BREAK, BREAKNEXT,THROW };
 
 	/**
 	 * Check that the return type is equivalent to void

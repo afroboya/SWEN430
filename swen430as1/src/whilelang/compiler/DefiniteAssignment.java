@@ -116,7 +116,11 @@ public class DefiniteAssignment {
 			return check((Stmt.Continue) stmt, environment);
 		} else if (stmt instanceof Stmt.Return) {
 			return check((Stmt.Return) stmt, environment);
-		} else if (stmt instanceof Stmt.VariableDeclaration) {
+		} else if (stmt instanceof Stmt.Throw) {
+			return check((Stmt.Throw) stmt, environment);
+		}else if (stmt instanceof Stmt.TryCatch) {
+			return check((Stmt.TryCatch) stmt, environment);
+		}else if (stmt instanceof Stmt.VariableDeclaration) {
 			return check((Stmt.VariableDeclaration) stmt, environment);
 		} else if (stmt instanceof Expr.Invoke) {
 			check((Expr.Invoke) stmt, environment);
@@ -174,6 +178,47 @@ public class DefiniteAssignment {
 		// In this case, control does not continue after this statement so we
 		// return no execution path.
 		return new ControlFlow(null,null);
+	}
+
+	public ControlFlow check(Stmt.Throw stmt, Defs environment) {
+		if(stmt.getExpr() != null) {
+			check(stmt.getExpr(), environment);
+		}
+		// In this case, control does not continue after this statement so we
+		// return no execution path.
+		return new ControlFlow(environment,null);
+	}
+
+	public ControlFlow check(Stmt.TryCatch stmt, Defs environment) {
+		ControlFlow try_enviroment = check(stmt.getTry_body(), environment);
+
+		//all variables declared in every block
+		Defs merged = try_enviroment.nextEnvironment;
+		//if in every catch/try statement it is assigned, then we know it is assigned
+		for(Stmt.Catch c:stmt.getCatchs()){
+			//add declared variable into enviroment, only matters to catch, we know it is assigned
+			Defs fresh = new Defs(environment).add(c.getCaught_var().getName());
+
+			Defs newEnv = check(c.getCatch_body(), fresh).nextEnvironment;
+			//check if declared variable here was also in other try or catch blocks
+			if(merged!=null){
+				merged = merged.join(newEnv);
+			}else{
+				merged = newEnv;
+			}
+		}
+		//For same variable assert that they are the same?
+
+
+		//add variable as we know it is assigned
+	//		Defs pre_catch_enviroment = environment.add(stmt.getCaught_var().getName());
+	//		ControlFlow catch_enviroment = check(stmt.getCatch_body(),pre_catch_enviroment);
+
+		//if a variable was assigned in both try and catch -> and already existed, then it can be assigned
+
+		//FIXME will have to suss this
+		// Now, merge all generated control-flow paths together
+		return new ControlFlow(merged,null);
 	}
 
 	public ControlFlow check(Stmt.VariableDeclaration stmt, Defs environment) {

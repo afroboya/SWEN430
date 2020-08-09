@@ -105,6 +105,10 @@ public class TypeChecker {
 			check((Stmt.Assign) stmt, environment);
 		} else if(stmt instanceof Stmt.Return) {
 			check((Stmt.Return) stmt, environment);
+		} else if(stmt instanceof Stmt.Throw) {
+			check((Stmt.Throw) stmt, environment);
+		}else if(stmt instanceof Stmt.TryCatch) {
+			check((Stmt.TryCatch) stmt, environment);
 		} else if(stmt instanceof Stmt.Break) {
 			// nothing to do
 		} else if(stmt instanceof Stmt.Continue) {
@@ -171,6 +175,24 @@ public class TypeChecker {
 		}
 	}
 
+	public void check(Stmt.Throw stmt, Map<String, Type> environment) {
+		Type t = check(stmt.getExpr(),environment);
+		stmt.setType(t);
+	}
+
+	public void check(Stmt.TryCatch stmt, Map<String, Type> environment) {
+		check(stmt.getTry_body(),environment);
+
+
+
+
+		for(Stmt.Catch c:stmt.getCatchs()){
+			Map<String, Type> catch_environment = new HashMap<String,Type>(environment);
+			check(c.getCaught_var(),catch_environment);
+			check(c.getCatch_body(),catch_environment);
+		}
+	}
+
 	public void check(Stmt.IfElse stmt, Map<String,Type> environment) {
 		Type ct = check(stmt.getCondition(),environment);
 		// Make sure condition has bool type
@@ -214,9 +236,7 @@ public class TypeChecker {
 			Type arrElementType = ((Type.Array)ct).getElement();
 			Type variableType = vd.getType();
 
-			if(isSubtype(variableType,arrElementType,((Type.Array) ct).getElement())){
-				System.out.println("same type!");
-			}else{
+			if(!isSubtype(variableType,arrElementType,((Type.Array) ct).getElement())){
 				syntaxError("Variable type "+variableType+" does not match collection element type: "+arrElementType, file.filename,ct);
 			}
 		}else{

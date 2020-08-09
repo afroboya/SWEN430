@@ -258,6 +258,168 @@ public interface Stmt extends SyntacticElement {
 		}
 	}
 
+	public static final class Throw extends SyntacticElement.Impl implements
+					Stmt {
+
+		/**
+		 * The (optional) expression which determines the return value. This maybe
+		 * <code>null</code> if no return expression is given.
+		 */
+		private final Expr expr;
+		private  Type type;//type of the expression above, evaluated at compile time
+
+		/**
+		 * Create a given return statement with an optional return value.
+		 *
+		 * @param expr
+		 *            the return value, which may be <code>null</code>.
+		 * @param attributes
+		 */
+		public Throw(Expr expr, Attribute... attributes) {
+			super(attributes);
+			this.expr = expr;
+		}
+
+		/**
+		 * Create a given return statement with an optional return value.
+		 *
+		 * @param expr
+		 *            the return value, which may be <code>null</code>.
+		 * @param attributes
+		 */
+		public Throw(Expr expr, Collection<Attribute> attributes) {
+			super(attributes);
+			this.expr = expr;
+		}
+
+		@Override
+		public String toString() {
+			return "throw " + getExpr();
+		}
+
+		/**
+		 * Get the optional return value.
+		 *
+		 * @return --- May be <code>null</code>.
+		 */
+		public Expr getExpr() {
+			return expr;
+		}
+
+		public void setType(Type type) {
+			this.type = type;
+		}
+
+		public Type getType() {
+			return type;
+		}
+	}
+
+	public static final class For extends SyntacticElement.Impl implements Stmt {
+
+		/**
+		 * Represents the loop index variable.
+		 */
+		private final VariableDeclaration declaration;
+		/**
+		 * The condition, when evaluated, determines whether or not to continue looping.
+		 */
+		private final Expr condition;
+		/**
+		 * The increment expression is used to update the loop index variable.
+		 */
+		private final Stmt increment;
+		/**
+		 * A sequence of zero or more statements making up the loop body.
+		 */
+		private final ArrayList<Stmt> body;
+
+		/**
+		 * Construct a for loop from a given declaration, condition and
+		 * increment. Note that the declaration, conditional and increment are
+		 * all optional.
+		 *
+		 * @param declaration
+		 *            An variable declation, which may be null.
+		 * @param condition
+		 *            A loop condition which may not be null.
+		 * @param increment
+		 *            An increment statement, which may be null.
+		 * @param body
+		 *            A list of zero or more statements, which may not be null.
+		 * @param attributes
+		 */
+		public For(VariableDeclaration declaration, Expr condition, Stmt increment,
+							 Collection<Stmt> body, Attribute... attributes) {
+			super(attributes);
+			this.declaration = declaration;
+			this.condition = condition;
+			this.increment = increment;
+			this.body = new ArrayList<Stmt>(body);
+		}
+
+		/**
+		 * Construct a for loop from a given declaration, condition and
+		 * increment. Note that the declaration, conditional and increment are
+		 * all optional.
+		 *
+		 * @param declaration
+		 *            An variable declation, which may be null.
+		 * @param condition
+		 *            A loop condition which may be null.
+		 * @param increment
+		 *            An increment statement, which may be null.
+		 * @param body
+		 *            A list of zero or more statements, which may not be null.
+		 * @param attributes
+		 */
+		public For(VariableDeclaration declaration, Expr condition, Stmt increment,
+							 Collection<Stmt> body, Collection<Attribute> attributes) {
+			super(attributes);
+			this.declaration = declaration;
+			this.condition = condition;
+			this.increment = increment;
+			this.body = new ArrayList<Stmt>(body);
+		}
+
+		/**
+		 * Get the variable declaration for this loop.
+		 *
+		 * @return May be null.
+		 */
+		public VariableDeclaration getDeclaration() {
+			return declaration;
+		}
+
+		/**
+		 * Get the loop condition.
+		 *
+		 * @return May be null.
+		 */
+		public Expr getCondition() {
+			return condition;
+		}
+
+		/**
+		 * Get the increment statement.
+		 *
+		 * @return May be null.
+		 */
+		public Stmt getIncrement() {
+			return increment;
+		}
+
+		/**
+		 * Get the loop body.
+		 *
+		 * @return May not be null.
+		 */
+		public ArrayList<Stmt> getBody() {
+			return body;
+		}
+	}
+
+
 	/**
 	 * Represents a while statement whose body is made up from a block of
 	 * statements separated by curly braces. Note that, unlike C or Java, the
@@ -445,107 +607,67 @@ public interface Stmt extends SyntacticElement {
 	 * @author David J. Pearce
 	 *
 	 */
-	public static final class For extends SyntacticElement.Impl implements Stmt {
+	public static final class TryCatch extends SyntacticElement.Impl implements Stmt {
 
-		/**
-		 * Represents the loop index variable.
-		 */
-		private final VariableDeclaration declaration;
-		/**
-		 * The condition, when evaluated, determines whether or not to continue looping.
-		 */
-		private final Expr condition;
-		/**
-		 * The increment expression is used to update the loop index variable.
-		 */
-		private final Stmt increment;
 		/**
 		 * A sequence of zero or more statements making up the loop body.
 		 */
-		private final ArrayList<Stmt> body;
+		private final List<Stmt> try_body;
+		private final List<Catch> catchs;
 
-		/**
-		 * Construct a for loop from a given declaration, condition and
-		 * increment. Note that the declaration, conditional and increment are
-		 * all optional.
-		 *
-		 * @param declaration
-		 *            An variable declation, which may be null.
-		 * @param condition
-		 *            A loop condition which may not be null.
-		 * @param increment
-		 *            An increment statement, which may be null.
-		 * @param body
-		 *            A list of zero or more statements, which may not be null.
-		 * @param attributes
-		 */
-		public For(VariableDeclaration declaration, Expr condition, Stmt increment,
-				Collection<Stmt> body, Attribute... attributes) {
+
+		public TryCatch(List<Stmt> try_body, List<Catch> catch_body, Attribute... attributes) {
 			super(attributes);
-			this.declaration = declaration;
-			this.condition = condition;
-			this.increment = increment;
-			this.body = new ArrayList<Stmt>(body);
+			this.try_body = try_body;
+			this.catchs = catch_body;
+
 		}
 
-		/**
-		 * Construct a for loop from a given declaration, condition and
-		 * increment. Note that the declaration, conditional and increment are
-		 * all optional.
-		 *
-		 * @param declaration
-		 *            An variable declation, which may be null.
-		 * @param condition
-		 *            A loop condition which may be null.
-		 * @param increment
-		 *            An increment statement, which may be null.
-		 * @param body
-		 *            A list of zero or more statements, which may not be null.
-		 * @param attributes
-		 */
-		public For(VariableDeclaration declaration, Expr condition, Stmt increment,
-				Collection<Stmt> body, Collection<Attribute> attributes) {
+		public TryCatch(List<Stmt> try_body, List<Catch> catchs,Collection<Attribute> attributes) {
 			super(attributes);
-			this.declaration = declaration;
-			this.condition = condition;
-			this.increment = increment;
-			this.body = new ArrayList<Stmt>(body);
+			this.try_body = try_body;
+			this.catchs = catchs;
 		}
 
-		/**
-		 * Get the variable declaration for this loop.
-		 *
-		 * @return May be null.
-		 */
-		public VariableDeclaration getDeclaration() {
-			return declaration;
+
+		public List<Stmt> getTry_body() {
+			return try_body;
 		}
 
-		/**
-		 * Get the loop condition.
-		 *
-		 * @return May be null.
-		 */
-		public Expr getCondition() {
-			return condition;
+		public List<Catch> getCatchs() {
+			return catchs;
 		}
+	}
+
+	public static final class Catch extends SyntacticElement.Impl implements Stmt {
 
 		/**
-		 * Get the increment statement.
-		 *
-		 * @return May be null.
+		 * What we are catching
 		 */
-		public Stmt getIncrement() {
-			return increment;
+		private final Stmt.VariableDeclaration caught_var;
+
+		private final List<Stmt> catch_body;
+
+
+		public Catch(Stmt.VariableDeclaration caught_var, List<Stmt> catch_body, Attribute... attributes) {
+			super(attributes);
+			this.caught_var = caught_var;
+			this.catch_body = catch_body;
+
 		}
 
-		/**
-		 * Get the loop body.
-		 *
-		 * @return May not be null.
-		 */
-		public ArrayList<Stmt> getBody() {
-			return body;
+		public Catch(Stmt.VariableDeclaration caught_var, List<Stmt> catch_body,Collection<Attribute> attributes) {
+			super(attributes);
+			this.caught_var = caught_var;
+			this.catch_body = catch_body;
+		}
+
+		public VariableDeclaration getCaught_var() {
+			return caught_var;
+		}
+
+		public List<Stmt> getCatch_body() {
+			return catch_body;
 		}
 	}
 

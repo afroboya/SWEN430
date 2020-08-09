@@ -320,9 +320,9 @@ public class Lexer {
 		return null;
 	}
 
-	//TODO real
+
 	public static final String[] keywords = { "true", "false", "void", "int", "real", "bool", "if",
-			"switch", "case", "default", "break","continue","while","do", "else", "is", "for", "assert", "print", "return", "type" };
+			"switch", "case", "default", "break","continue","while","do", "else", "is", "for", "assert", "print", "return", "type","throw","try" };
 
 	public Token scanIdentifier() {
 		int start = pos;
@@ -429,7 +429,6 @@ public class Lexer {
 		}
 	}
 
-	//TODO add real class
 
 	/**
 	 * Represents an integer constant. That is, a sequence of 1 or more digits.
@@ -447,6 +446,7 @@ public class Lexer {
 		}
 	}
 
+
 	/**
 	 * Represents an real constant. That is, a sequence of 1 or more digits.
 	 *
@@ -458,6 +458,16 @@ public class Lexer {
 		public final double value;
 
 		public Real(double r, String text, int pos) {
+			super(text, pos);
+			value = r;
+		}
+	}
+
+	public static class Throw extends Token {
+
+		public final Object value;
+
+		public Throw(Object r, String text, int pos) {
 			super(text, pos);
 			value = r;
 		}
