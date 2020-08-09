@@ -28,7 +28,9 @@ import java.util.Map;
 
 import whilelang.ast.Expr;
 import whilelang.ast.Stmt;
+import whilelang.ast.Type;
 import whilelang.ast.WhileFile;
+import whilelang.compiler.TypeChecker;
 
 /**
  * A simple interpreter for WhileLang programs, which executes them in their
@@ -55,7 +57,7 @@ public class Interpreter {
 		WhileFile.Decl main = declarations.get("main");
 		if(main instanceof WhileFile.MethodDecl) {
 			WhileFile.MethodDecl fd = (WhileFile.MethodDecl) main;
-			execute(fd);
+			Object exec = execute(fd);
 		} else {
 			System.out.println("Cannot find a main() function");
 		}
@@ -131,6 +133,10 @@ public class Interpreter {
 			return execute((Stmt.Continue) stmt,frame);
 		} else if(stmt instanceof Stmt.IfElse) {
 			return execute((Stmt.IfElse) stmt,frame);
+		}else if(stmt instanceof Stmt.Throw) {
+			return execute((Stmt.Throw) stmt,frame);
+		}else if(stmt instanceof Stmt.TryCatch) {
+			return execute((Stmt.TryCatch) stmt,frame);
 		} else if(stmt instanceof Stmt.Return) {
 			return execute((Stmt.Return) stmt,frame);
 		} else if(stmt instanceof Stmt.VariableDeclaration) {
@@ -215,30 +221,6 @@ public class Interpreter {
 				}
 			}
 		}
-
-//		ArrayList<Integer> collection_values = (ArrayList<Integer>)frame.get();
-//		if(collection_values instanceof Iterable){
-//			Iterable c = (Iterable) collection_values;
-//			for(Object a:c){
-//				System.out.println(a);
-//			}
-//		}
-
-//		if(stmt.getCollection_values() instanceof Type.Array){
-//			System.out.println("type array");
-//		}
-//		for(Object o:stmt.getCollection_values())
-//		while((Boolean) execute(stmt.getCondition(),frame)) {
-//			Object ret = execute(stmt.getBody(),frame);
-//			if(ret == BREAK_CONSTANT) {
-//				break;
-//			} else if(ret == CONTINUE_CONSTANT) {
-//				// continue :)
-//			} else if(ret != null) {
-//				return ret;
-//			}
-//			execute(stmt.getIncrement(),frame);
-//		}
 		return null;
 	}
 
@@ -279,6 +261,86 @@ public class Interpreter {
 		} else {
 			return execute(stmt.getFalseBranch(),frame);
 		}
+	}
+
+	private Object execute(Stmt.Throw stmt, HashMap<String,Object> frame){
+		//it is of type throw....
+		Object o = execute(stmt.getExpr(),frame);
+		throw new myException("My Exception "+stmt.getExpr().toString(),stmt,o);
+	}
+
+	public class myException extends RuntimeException {
+		private final Stmt.Throw err;
+		private final Object evaluatedVal;
+		public myException(String errorMessage, Stmt.Throw err,Object evaluatedVal) {
+			super(errorMessage);
+			this.err = err;
+			this.evaluatedVal = evaluatedVal;
+		}
+
+		public Stmt.Throw getErr() {
+			return err;
+		}
+
+		public Object getEvaluatedVal() {
+			return evaluatedVal;
+		}
+	}
+
+
+	private Object execute(Stmt.TryCatch stmt, HashMap<String,Object> frame) {
+		Object condition =null;
+		try {
+			condition = execute(stmt.getTry_body(), frame);
+			//FIXME what if no try, how does it continue
+		}catch (Exception e) {
+			if (e instanceof myException) {
+				myException exception = (myException) e;
+				Object exception_expr_value = exception.getEvaluatedVal();
+				TypeChecker checker = new TypeChecker();
+				Type exception_val_type = exception.getErr().getType();
+
+				//List so catch statements will be evaulated in order
+				//TODO check if any catch statements are the same, as it will be dead code.
+				for(Stmt.Catch v:stmt.getCatchs()){
+					Type t = v.getCaught_var().getType();
+					if(t instanceof Type.Named){
+						Type.Named named = (Type.Named) t;
+						WhileFile.Decl s = this.declarations.get(named.getName());
+						if(s instanceof WhileFile.TypeDecl){
+							WhileFile.TypeDecl dec = (WhileFile.TypeDecl)s;
+							t = dec.getType();
+						}
+
+					}
+
+					if(checker.isSubtype(t,exception_val_type,exception.getErr().getExpr())){
+						//assign catch variable a value
+						//execute catch block
+						//return
+						frame.put(v.getCaught_var().getName(),exception_expr_value);
+						return execute(v.getCatch_body(),frame);
+					}
+				}
+
+				//None of the catch blocks matched, rethrow error
+				throw e;
+			} else {
+				//FIXME catch error and rethrow with code
+//				String message = e.getMessage();
+//				if(message.equals("assertion failure")){
+//
+//				}
+//
+//				String emessage1 = e.getLocalizedMessage();
+//				Throwable ethrowable = e.getCause();
+
+				//probably some other error thats my fault
+				throw e;
+			}
+
+		}
+		return null;
 	}
 
 	private Object execute(Stmt.Break stmt, HashMap<String, Object> frame) {
@@ -322,42 +384,6 @@ public class Interpreter {
 		Object value;
 		if (re != null) {
 			value = execute(re, frame);
-
-			//This code would convert from int to double, but it doesnt seem to be needed
-
-//			if(stmt.getType() instanceof Type.Real){
-//				if(value instanceof Integer){
-//					value = ((Integer)value).doubleValue();
-//				}
-//			}
-
-//			else if(stmt.getType() instanceof Type.Array){
-//				if(value instanceof ArrayList){
-//					ArrayList value_array = (ArrayList)value;
-//					if(!value_array.isEmpty() && value_array.get(0) instanceof Double) {
-//						ArrayList<Double> double_arr = new ArrayList<>();
-//						for (Object val : value_array) {
-//							double_arr.add(((Number) val).doubleValue());
-//						}
-//						value = double_arr;
-//					}
-//				}
-//			}else if(stmt.getType() instanceof Type.Record){
-//				Type.Record t = (Type.Record)stmt.getType();
-//				HashMap<String,Object> currentMap = (HashMap<String, Object>) value;
-//				HashMap<String,Object> newMap = new HashMap<>();
-//				//first value is type, second is variable name
-//				for(Pair<Type,String> p:t.getFields()){
-//					String key = p.second();
-//					//if type real ensure all values are double
-//					if(p.first() instanceof Type.Real){
-//						newMap.put(key,((Number)currentMap.get(key)).doubleValue());
-//					}else{
-//						newMap.put(key,currentMap.get(key));
-//					}
-//				}
-//				value = newMap;
-//			}
 		} else {
 			value = Collections.EMPTY_SET; // used to indicate a variable has
 											// been declared
