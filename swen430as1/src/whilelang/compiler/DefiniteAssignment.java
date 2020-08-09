@@ -228,12 +228,18 @@ public class DefiniteAssignment {
 		//
 		return new ControlFlow(environment,null);
 	}
+
 	public ControlFlow check(Stmt.DoWhile stmt, Defs environment) {
 		ControlFlow new_control_flow = check(stmt.getBody(), environment);
 		check(stmt.getCondition(), new_control_flow.nextEnvironment);
-		//can consider variables definitely assigned as body runs at least once
-		return new_control_flow;
-
+		//if it contains a break statement that effects variables
+		if(new_control_flow.breakEnvironment == null){
+			//accept it?
+			return new_control_flow;
+		}else{
+			//only variables before break can be considered definitely assigned
+			return new ControlFlow(new_control_flow.breakEnvironment,null);
+		}
 	}
 
 	public ControlFlow check(Stmt.Switch stmt, Defs environment) {
