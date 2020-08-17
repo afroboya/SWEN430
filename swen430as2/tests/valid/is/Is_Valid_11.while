@@ -1,0 +1,27 @@
+type nint is null|int
+type Rec5 is { nint f1, nint f2 }
+type Rec4 is { Rec5 f1, Rec5 f2 }
+type Rec3 is { Rec4 f1, Rec4 f2 }
+type Rec2 is { Rec3 f1, Rec3 f2 }
+type Rec1 is { Rec2 f1, Rec2 f2 }
+
+bool f(Rec1 r) {
+    return r.f1.f1.f1.f1.f1 is int;
+}
+
+void main() {
+    Rec5 r5 = {f1:123, f2:12387};
+    Rec4 r4 = {f1:r5, f2:r5};
+    Rec3 r3 = {f1:r4, f2:r4};
+    Rec2 r2 = {f1:r3, f2:r3};
+    Rec1 r1 = {f1:r2, f2:r2};
+    assert f(r1);
+    //
+    r5 = {f1:null, f2:12387};
+    r4 = {f1:r5, f2:r5};
+    r3 = {f1:r4, f2:r4};
+    r2 = {f1:r3, f2:r3};
+    r1 = {f1:r2, f2:r2};
+    assert !f(r1);
+   
+}

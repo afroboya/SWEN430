@@ -1,0 +1,7 @@
+type nint is null|int
+type Point is { nint x, nint y}
+
+void main() {
+    Point p = {x:123,y:123};
+    assert p.x is bool;
+}

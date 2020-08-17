@@ -1,0 +1,28 @@
+type nint is null|int
+type Point is {nint x, nint y}
+
+void main() {
+    Point p = {x:12347,y:2363};
+    assert p is {int x, int y};
+    assert !(p is {null x, int y});
+    assert !(p is {int x, null y});
+    assert !(p is {null x, null y});
+    //
+    p = {x:null,y:887};
+    assert !(p is {int x, int y});
+    assert p is {null x, int y};
+    assert !(p is {int x, null y});
+       assert !(p is {null x, null y});
+    //
+    p = {x:1234,y:null};
+    assert !(p is {int x, int y});
+    assert !(p is {null x, int y});
+    assert p is {int x, null y};
+    assert !(p is {null x, null y});
+    //
+    p = {x:null,y:null};
+    assert !(p is {int x, int y});
+    assert !(p is {null x, int y});
+    assert !(p is {int x, null y});
+    assert p is {null x, null y};
+}

@@ -1,0 +1,4 @@
+void main() {
+    int|null x = null;
+    int|bool y = (int|bool) x;
+}

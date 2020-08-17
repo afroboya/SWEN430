@@ -1,0 +1,6 @@
+type nint is null|int
+type Rec1 is { int f1, int f2 }
+
+bool f(Rec1 r) {
+    return r[0] is int;
+}

@@ -1,0 +1,67 @@
+type Point is {int x, int y}
+type many is null|bool|int|Point|int[]|bool[]|Point[]
+
+void main() {
+    many x = null;
+    assert x is null;
+    assert !(x is bool);
+    assert !(x is int);
+    assert !(x is Point);
+    assert !(x is int[]);
+    assert !(x is bool[]);
+    assert !(x is Point[]);
+    //
+    x = false;
+    assert !(x is null);
+    assert x is bool;
+    assert !(x is int);
+    assert !(x is Point);
+    assert !(x is int[]);
+    assert !(x is bool[]);
+    assert !(x is Point[]);
+    //
+    x = 1234;
+    assert !(x is null);
+    assert !(x is bool);
+    assert x is int;
+    assert !(x is Point);
+    assert !(x is int[]);
+    assert !(x is bool[]);
+    assert !(x is Point[]);
+    //
+    x = {x:172, y:777};
+    assert !(x is null);
+    assert !(x is bool);
+    assert !(x is int);
+    assert x is Point;
+    assert !(x is int[]);
+    assert !(x is bool[]);
+    assert !(x is Point[]);
+    //
+    x = [1,2,3];
+    assert !(x is null);
+    assert !(x is bool);
+    assert !(x is int);
+    assert !(x is Point);
+    assert x is int[];
+    assert !(x is bool[]);
+    assert !(x is Point[]);
+    //
+    x = [false,true,false];
+    assert !(x is null);
+    assert !(x is bool);
+    assert !(x is int);
+    assert !(x is Point);
+    assert !(x is int[]);
+    assert x is bool[];
+    assert !(x is Point[]);
+    //
+    x = [{x:1,y:2},{x:2,y:1}];
+    assert !(x is null);
+    assert !(x is bool);
+    assert !(x is int);
+    assert !(x is Point);
+    assert !(x is int[]);
+    assert !(x is bool[]);
+    assert x is Point[];
+}

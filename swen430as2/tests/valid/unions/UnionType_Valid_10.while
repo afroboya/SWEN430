@@ -1,0 +1,34 @@
+type Record_i is  { int field }
+type Record_n is  { null field }
+type Record_in is { int field } | { null field }
+type Record_ni is Record_n | Record_i
+
+
+Record_in f_i(Record_i r) {
+    return r;
+}
+
+Record_in f_n(Record_n r) {
+    return r;
+}
+
+Record_ni g_i(Record_i r) {
+    return r;
+}
+
+Record_ni g_n(Record_n r) {
+    return r;
+}
+
+Record_ni id(Record_in r) {
+    return r;
+}
+
+void main() {
+    assert f_i({field: 1}) == {field: 1};
+    assert f_n({field: null}) == {field: null};
+    assert g_i({field: 123}) == {field: 123};
+    assert g_n({field: null}) == {field: null};
+    assert id({field: 234}) == {field: 234};
+    assert id({field: null}) == {field: null};
+}

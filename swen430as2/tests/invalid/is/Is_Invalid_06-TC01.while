@@ -1,0 +1,10 @@
+type nint is null|int
+type Rec5 is { nint f1, nint f2 }
+type Rec4 is { Rec5 f1, Rec5 f2 }
+type Rec3 is { Rec4 f1, Rec4 f2 }
+type Rec2 is { Rec3 f1, Rec3 f2 }
+type Rec1 is { Rec2 f1, Rec2 f2 }
+
+bool f(Rec1 r) {
+    return r.f1.f1.f1.f1 is int;
+}

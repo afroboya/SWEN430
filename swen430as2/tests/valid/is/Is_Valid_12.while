@@ -1,0 +1,8 @@
+void main() {
+    // Test precedence
+    assert 1+1 is int;
+    assert [1][0] is int;
+    assert {f:0}.f is int;
+    assert true && true is bool;
+    assert 1 < 0 is bool;
+}

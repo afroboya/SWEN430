@@ -1,0 +1,14 @@
+type narr is int[]|null
+
+void main() {
+    narr x = [0];
+    narr y = null;
+    assert x is int[];
+    assert y is null;
+    assert !(x is null);
+    assert !(y is int[]);
+    x = null;
+    y = [123123];
+    assert x is null;
+    assert y is int[];
+}

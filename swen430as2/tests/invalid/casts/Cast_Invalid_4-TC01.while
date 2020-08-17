@@ -1,0 +1,13 @@
+type msgType is {int f} | {bool f}
+    
+msgType f({int|null f} x) {
+    if(x.f == null) {
+	return {f:false};
+    } else {
+	return (msgType) x;
+    }
+}
+void main() {
+    assert f({f:1}) == {f:1};
+    assert f({f:null}) == false;
+}

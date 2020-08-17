@@ -1,0 +1,14 @@
+type nint is int|null
+
+void main() {
+    nint x = 1232;
+    nint y = null;    
+    assert x is int;
+    assert y is null;
+    assert !(y is int);
+    assert !(x is null);
+    x = null;
+    y = 123123;
+    assert x is null;
+    assert y is int;    
+}

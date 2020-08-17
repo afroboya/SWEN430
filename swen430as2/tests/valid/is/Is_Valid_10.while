@@ -1,0 +1,16 @@
+type nint is null|int
+
+int get(nint p) {
+    if(p is int) {
+	return (int) p;
+    } else {
+	return 0;
+    }
+}
+    
+void main() {
+    nint p = 1235;
+    assert get(p) == 1235;
+    p = null;
+    assert get(p) == 0;
+}

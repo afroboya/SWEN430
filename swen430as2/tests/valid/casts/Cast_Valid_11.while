@@ -1,0 +1,9 @@
+type msgType is {int f} | {null f}
+    
+msgType f({int|null f} x) {
+    return (msgType) x;
+}
+void main() {
+    assert f({f:1}) == {f:1};
+    assert f({f:null}) == {f:null};
+}

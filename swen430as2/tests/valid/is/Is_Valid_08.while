@@ -1,0 +1,15 @@
+type nint is null|int
+
+void main() {
+    nint[] p = [123,21346,12,14,5];
+    assert p is int[];
+    assert !(p is null[]);
+    //
+    p = [123,null,12,14,5];
+    assert !(p is int[]);
+    assert !(p is null[]);
+    //
+    p = [null,null];
+    assert !(p is int[]);
+    assert p is null[];
+}

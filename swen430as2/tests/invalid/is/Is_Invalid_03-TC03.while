@@ -1,0 +1,8 @@
+
+void f() {
+
+}
+
+void main() {
+    assert f() is int;
+}

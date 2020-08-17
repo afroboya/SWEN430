@@ -1,0 +1,20 @@
+type nint is null|int
+type nirec is null|int|{int f}
+    
+void main() {
+    nint[] xs = [1,null,2];
+    //
+    assert xs[0] == 1;
+    assert xs[1] == null;
+    assert xs[2] == 2;
+    //
+    nirec[] ys = [1,null,{f:1},1,2,4,null];
+    //
+    assert ys[0] == 1;
+    assert ys[1] == null;
+    assert ys[2] == {f:1};
+    assert ys[3] == 1;
+    assert ys[4] == 2;
+    assert ys[5] == 4;
+    assert ys[6] == null;
+}

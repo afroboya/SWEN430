@@ -1,0 +1,14 @@
+type nrec is {int f}|{int g}
+
+void main() {
+    nrec x = {f:0};
+    nrec y = {g:1};
+    assert x is {int f};
+    assert y is {int g};
+    assert !(x is {int g});
+    assert !(y is {int f});
+    x = {g:1767};
+    y = {f:5512};
+    assert x is {int g};
+    assert y is {int f};
+}

@@ -1,0 +1,35 @@
+type nint is null|int
+
+void main() {
+    nint[] p = [8,2,6];
+    assert p[0] is int;
+    assert p[1] is int;
+    assert p[2] is int;
+    assert !(p[0] is null);
+    assert !(p[1] is null);
+    assert !(p[2] is null);
+    //
+    p = [null,88,66];
+    assert !(p[0] is int);
+    assert p[1] is int;
+    assert p[2] is int;
+    assert p[0] is null;
+    assert !(p[1] is null);
+    assert !(p[2] is null);
+    //
+    p = [81,null,64];
+    assert p[0] is int;
+    assert !(p[1] is int);
+    assert p[2] is int;
+    assert !(p[0] is null);
+    assert p[1] is null;
+    assert !(p[2] is null);
+    //
+    p = [1088,52,null];
+    assert p[0] is int;
+    assert p[1] is int;
+    assert !(p[2] is int);
+    assert !(p[0] is null);
+    assert !(p[1] is null);
+    assert p[2] is null;
+}

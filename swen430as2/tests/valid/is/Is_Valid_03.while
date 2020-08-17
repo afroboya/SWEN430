@@ -1,0 +1,14 @@
+type nrec is {int f}|null
+
+void main() {
+    nrec x = {f:0};
+    nrec y = null;
+    assert x is {int f};
+    assert y is null;
+    assert !(x is null);
+    assert !(y is {int f});
+    x = null;
+    y = {f:1231};
+    assert x is null;
+    assert y is {int f};
+}
