@@ -21,10 +21,7 @@ package whilelang.compiler;
 import static whilelang.util.SyntaxError.internalFailure;
 import static whilelang.util.SyntaxError.syntaxError;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import whilelang.ast.Attribute;
 import whilelang.ast.Expr;
@@ -444,10 +441,41 @@ public class TypeChecker {
 		for (Type t : types) {
 			if (isSubtype(t, lub, elem)) {
 				lub = t;
-			} else {
-				checkSubtype(lub, t, elem);
+			} else if(!isSubtype(lub, t, elem)) {
+				List<String> matches = new ArrayList<>();
+				//must be union, not all types in array are same
+				for(Map.Entry<String, WhileFile.TypeDecl> e:this.types.entrySet()){
+					Type declared_type = e.getValue().getType();
+					boolean match = true;
+					for (Type arr_elem_type : types) {
+						if (!isSubtype(declared_type, arr_elem_type, elem)) {
+							match = false;
+							break;
+						}
+					}
+					if(match){
+						matches.add(e.getKey());
+					}
+				}
+				if(matches.isEmpty()){
+					syntaxError("TC01", "expected type " + t + ", found " + lub, file.filename,
+							elem);
+				}
+				if(matches.size() ==1){
+					return this.types.get(matches.get(0)).getType();
+				}
+				//need to figure out which is the most specific match
+				Type super_type = this.types.get(matches.get(0)).getType();
+				for(int i=1;i<matches.size();i++){
+					Type t1 = this.types.get(matches.get(i)).getType();
+					if(isSubtype(super_type,t1,elem)){
+						super_type = t1;
+					}
+				}
+				return super_type;
 			}
 		}
+
 		return lub;
 	}
 
@@ -553,7 +581,7 @@ public class TypeChecker {
 		}else if (tsuper instanceof Type.Null && tsub instanceof Type.Null) {
 			// OK
 			return true;
-		}  else if (tsuper instanceof Type.Bool && tsub instanceof Type.Bool) {
+		}else if (tsuper instanceof Type.Bool && tsub instanceof Type.Bool) {
 			// OK
 			return true;
 		} else if (tsuper instanceof Type.Int && tsub instanceof Type.Int) {
@@ -604,6 +632,82 @@ public class TypeChecker {
 				syntaxError("TC02", "unknown type encountered: " + tsub, file.filename,
 						element);
 			}
+		}else if (tsuper instanceof Type.Union||tsub instanceof Type.Union) {
+			//important this comes after everything else
+			if(tsub instanceof Type.Union && tsuper instanceof Type.Union){
+				//then it must contain all the same fields as parent
+				Type.Union tsub_union = (Type.Union)tsub;
+				Type.Union tsuper_union = (Type.Union)tsuper;
+				for(Type t:tsub_union.getType_list()){
+					boolean isSub = false;
+					for(Type t_super:tsuper_union.getType_list()){
+						isSub = isSubtype(t_super,t,element);
+						if(isSub){
+							break;
+						}
+					}
+					if(!isSub){
+						return false;
+					}
+				}
+				return true;
+			}else if(tsuper instanceof Type.Union && tsub instanceof Type.Record){
+//				Type.Union super_union = (Type.Union)tsuper;
+//				for(Type t:super_union.getType_list()){
+//					if(isSubtype(t,tsub,element)){
+//						return true;
+//					}
+//				}
+				//expand record to get all possible types for a given feild
+				Type.Record tsub_record = (Type.Record)tsub;
+//				List<Pair<Type,String>> temp_list = new ArrayList<>();
+
+
+				List<Pair<Type,String>> record_expanded = new ArrayList<>();
+
+				for(Pair<Type,String> p:tsub_record.getFields()){
+					Type t = p.first();
+					String name = p.second();
+					if(t instanceof Type.Union){
+						for(Type local_type:((Type.Union) t).getType_list()){
+							Pair<Type,String> pair = new Pair<>(local_type,name);
+							List<Pair<Type,String>> list = new ArrayList<>();
+							record_expanded.add(pair);
+						}
+					}else{
+						record_expanded.add(p);
+					}
+				}
+
+				Type.Record expanded = new Type.Record(record_expanded);
+				for(Type t: ((Type.Union) tsuper).getType_list()){
+					if(isSubtype(t,expanded,element)){
+						return true;
+					}
+				}
+				return false;
+
+			}else if(tsuper instanceof Type.Union ){
+				Type.Union u = (Type.Union)tsuper;
+				for(Type t:u.getType_list()){
+					if(isSubtype(t,tsub,element)){
+						return true;
+					}
+				}
+			}else{
+				//tsub is of type union
+				//tsuper is not, so all its elements must be a subtype
+				Type.Union tsub_union = (Type.Union)tsub;
+				for(Type t:tsub_union.getType_list()){
+					if(!isSubtype(tsuper,t,element)){
+						return false;
+					}
+				}
+				return true;
+			}
+
+
+			return false;
 		}
 		return false;
 	}

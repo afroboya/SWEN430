@@ -19,7 +19,9 @@
 package whilelang.ast;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import whilelang.util.Pair;
 import whilelang.util.SyntacticElement;
@@ -266,6 +268,46 @@ public interface Type extends SyntacticElement {
 			}
 
 			return "{" + r + "}";
+		}
+	}
+
+	public static final class Union extends SyntacticElement.Impl implements Type {
+
+
+
+
+		private final Set<Type> type_set;
+
+		public Union(Set<Type> type_set, Attribute... attributes) {
+			super(attributes);
+			this.type_set = new HashSet<>();
+			for(Type t:type_set){
+				if(t instanceof Union){
+					this.type_set.addAll(((Union) t).getType_list());
+				}else{
+					this.type_set.add(t);
+				}
+
+			}
+		}
+		public Set<Type> getType_list() {
+			return type_set;
+		}
+
+		@Override
+		public String toString() {
+			if(type_set.isEmpty()){
+				return "empty union";
+			}
+			StringBuilder s = new StringBuilder("union: ");
+			for(Type t :type_set) {
+				s.append(t.toString());
+				s.append(",");
+			}
+			s.deleteCharAt( s.length() - 1 );
+
+
+			return s.toString();
 		}
 	}
 }

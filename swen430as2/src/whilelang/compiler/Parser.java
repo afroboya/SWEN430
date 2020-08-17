@@ -919,6 +919,16 @@ public class Parser {
 		checkNotEof();
 		// Determine base type
 		Type type = parseBaseType();
+
+		Token token = tokens.get(index);
+		if(token instanceof Bar){
+			index++;
+			Type t = parseType();
+			Set<Type> list_type = new HashSet<>();
+			list_type.add(type);
+			list_type.add(t);
+			return new Type.Union(list_type);
+		}
 		// Determine array level (if any)
 		while (tokens.get(index) instanceof LeftSquare) {
 			match("[");
