@@ -403,7 +403,9 @@ public class TypeChecker {
 	 */
 	@SuppressWarnings("unchecked")
 	private Type typeOf(Object constant, SyntacticElement elem) {
-		if (constant instanceof Boolean) {
+		if(constant == null){
+			return new Type.Null();
+		}else if (constant instanceof Boolean) {
 			return new Type.Bool();
 		} else if (constant instanceof Integer) {
 			return new Type.Int();
@@ -548,7 +550,10 @@ public class TypeChecker {
 		if (tsub instanceof Type.Void) {
 			// OK
 			return true;
-		} else if (tsuper instanceof Type.Bool && tsub instanceof Type.Bool) {
+		}else if (tsuper instanceof Type.Null && tsub instanceof Type.Null) {
+			// OK
+			return true;
+		}  else if (tsuper instanceof Type.Bool && tsub instanceof Type.Bool) {
 			// OK
 			return true;
 		} else if (tsuper instanceof Type.Int && tsub instanceof Type.Int) {

@@ -317,10 +317,10 @@ public class Interpreter {
 		Object lhs = execute(expr.getLhs(), frame);
 
 		switch (expr.getOp()) {
-		case AND:
-			return ((Boolean)lhs) && ((Boolean)execute(expr.getRhs(), frame));
-		case OR:
-			return ((Boolean)lhs) || ((Boolean)execute(expr.getRhs(), frame));
+			case AND:
+				return ((Boolean)lhs) && ((Boolean)execute(expr.getRhs(), frame));
+			case OR:
+				return ((Boolean)lhs) || ((Boolean)execute(expr.getRhs(), frame));
 		}
 
 		// Second, deal the rest.
@@ -338,8 +338,14 @@ public class Interpreter {
 		case REM:
 			return ((Integer)lhs) % ((Integer)rhs);
 		case EQ:
+			if(lhs == null || rhs == null){
+				return lhs ==null && rhs == null;
+			}
 			return lhs.equals(rhs);
 		case NEQ:
+			if(lhs == null || rhs == null){
+				return (lhs == null && rhs != null) || (lhs != null && rhs == null);
+			}
 			return !lhs.equals(rhs);
 		case LT:
 			return ((Integer)lhs) < ((Integer)rhs);

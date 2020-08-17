@@ -63,6 +63,24 @@ public interface Type extends SyntacticElement {
 		}
 	}
 
+	public static final class Null extends SyntacticElement.Impl implements
+			Type {
+
+		/**
+		 * Construct a new <code>void</code> type.
+		 *
+		 * @param attributes
+		 */
+		public Null(Attribute... attributes) {
+			super(attributes);
+		}
+
+		@Override
+		public String toString() {
+			return "null";
+		}
+	}
+
 	/**
 	 * Represents the <code>bool</code> type which contains the values
 	 * <code>true</code> and <code>false</code>.

@@ -311,7 +311,7 @@ public class Lexer {
 		return null;
 	}
 
-	public static final String[] keywords = { "true", "false", "void", "int", "bool", "if",
+	public static final String[] keywords = { "true", "false", "void","null", "int", "bool", "if",
 			"switch", "case", "default", "break","continue","while", "else", "is", "for", "assert", "print", "return", "type" };
 
 	public Token scanIdentifier() {

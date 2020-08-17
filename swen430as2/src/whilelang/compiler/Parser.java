@@ -944,6 +944,9 @@ public class Parser {
 		} else if (token.text.equals("void")) {
 			matchKeyword("void");
 			return new Type.Void(sourceAttr(start, index - 1));
+		} else if (token.text.equals("null")) {
+			matchKeyword("null");
+			return new Type.Null(sourceAttr(start, index - 1));
 		} else if (token.text.equals("bool")) {
 			matchKeyword("bool");
 			return new Type.Bool(sourceAttr(start, index - 1));
