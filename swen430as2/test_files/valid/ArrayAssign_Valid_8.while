@@ -1,0 +1,12 @@
+void main() {
+    int[] arr1 = [1,2,3];
+    int[] arr2 = [3,4,5];
+    assert arr1 == [1,2,3];
+    assert arr2 == [3,4,5];
+    arr1 = arr2; 
+    assert arr1 == [3,4,5];       
+    assert arr2 == [3,4,5];
+    arr2[0] = 0;
+    assert arr1 == [3,4,5];       
+    assert arr2 == [0,4,5];    
+}
