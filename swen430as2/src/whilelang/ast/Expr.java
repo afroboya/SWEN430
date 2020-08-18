@@ -93,7 +93,7 @@ public interface Expr extends SyntacticElement {
 
 		@Override
 		public String toString() {
-			return expr.toString()+"is: "+isType.toString();
+			return expr.toString()+" is: "+isType.toString();
 		}
 
 

@@ -94,7 +94,6 @@ public class Interpreter {
 
 	private Object execute(List<Stmt> block, HashMap<String,Object> frame) {
 		for(int i=0;i!=block.size();i=i+1) {
-			System.out.println("i: "+i);
 			Object r = execute(block.get(i),frame);
 			if(r != null) {
 				return r;
