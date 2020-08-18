@@ -1,0 +1,11 @@
+type msg1 is {int kind,int item}
+type msg2 is {int kind,int[] items}
+int|int[] getData(msg1|msg2 m) {
+    if(m is msg1){return ((msg1)m).item;
+    }
+    return ((msg2)m).items;
+}
+
+void main() {
+    assert getData({kind:1,item:2})==2;
+}
