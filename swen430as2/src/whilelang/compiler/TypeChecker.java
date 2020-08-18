@@ -233,6 +233,8 @@ public class TypeChecker {
 			type = check((Expr.Unary) expr, environment);
 		} else if(expr instanceof Expr.Variable) {
 			type = check((Expr.Variable) expr, environment);
+		}else if(expr instanceof Expr.Cast) {
+			type = check((Expr.Cast) expr, environment);
 		} else {
 			internalFailure("unknown expression encountered (" + expr + ")", file.filename,expr);
 			return null; // dead code
@@ -389,6 +391,13 @@ public class TypeChecker {
 					file.filename, expr);
 		}
 		return type;
+	}
+
+	public Type check(Expr.Cast cast_expr, Map<String, Type> environment) {
+		Type expr_type = check(cast_expr.getExpr(),environment);
+		Type cast_type = cast_expr.getCastType();
+		checkSubtype(expr_type,cast_type,cast_expr);
+		return cast_type;
 	}
 
 	/**
@@ -652,40 +661,49 @@ public class TypeChecker {
 				}
 				return true;
 			}else if(tsuper instanceof Type.Union && tsub instanceof Type.Record){
-//				Type.Union super_union = (Type.Union)tsuper;
-//				for(Type t:super_union.getType_list()){
-//					if(isSubtype(t,tsub,element)){
-//						return true;
-//					}
-//				}
-				//expand record to get all possible types for a given feild
 				Type.Record tsub_record = (Type.Record)tsub;
-//				List<Pair<Type,String>> temp_list = new ArrayList<>();
-
-
 				List<Pair<Type,String>> record_expanded = new ArrayList<>();
-
+				List<Type.Union> record_expanded_union = new ArrayList<>();
 				for(Pair<Type,String> p:tsub_record.getFields()){
 					Type t = p.first();
 					String name = p.second();
 					if(t instanceof Type.Union){
+						Set<Type> tempUnion = new HashSet<>();
 						for(Type local_type:((Type.Union) t).getType_list()){
-							Pair<Type,String> pair = new Pair<>(local_type,name);
-							List<Pair<Type,String>> list = new ArrayList<>();
-							record_expanded.add(pair);
+							Type.Record r = new Type.Record(Collections.singletonList(new Pair<Type, String>(local_type, name)));
+							tempUnion.add(r);
 						}
+						Type.Union u =  new Type.Union(tempUnion);
+						record_expanded_union.add(u);
 					}else{
 						record_expanded.add(p);
 					}
 				}
 
-				Type.Record expanded = new Type.Record(record_expanded);
-				for(Type t: ((Type.Union) tsuper).getType_list()){
-					if(isSubtype(t,expanded,element)){
+
+				Type.Union expandedUnion =expandUnion((Type.Union) tsuper);
+
+				//check if any of these are direct matches
+				for(Type.Union u:record_expanded_union){
+					if(isSubtype(expandedUnion,u,element)){
 						return true;
 					}
 				}
+				if(record_expanded.isEmpty()){
+					return false;
+				}
+				Type.Record expandedRecord = new Type.Record(record_expanded);
+				//no direct matches keep trying
+				for(Type t:expandedUnion.getType_list()){
+					if(t instanceof Type.Record){
+						if(Recordcontains((Type.Record) t,expandedRecord,element)){
+							return true;
+						}
+					}
+				}
+
 				return false;
+
 
 			}else if(tsuper instanceof Type.Union ){
 				Type.Union u = (Type.Union)tsuper;
@@ -694,9 +712,10 @@ public class TypeChecker {
 						return true;
 					}
 				}
+				return false;
 			}else{
 				//tsub is of type union
-				//tsuper is not, so all its elements must be a subtype
+				//tsuper is not, so all its elements must be a subtype of whatever tsub is i.e int|int is subtype of int
 				Type.Union tsub_union = (Type.Union)tsub;
 				for(Type t:tsub_union.getType_list()){
 					if(!isSubtype(tsuper,t,element)){
@@ -705,11 +724,55 @@ public class TypeChecker {
 				}
 				return true;
 			}
-
-
-			return false;
 		}
 		return false;
+	}
+
+
+
+	private Type.Union expandUnion(Type.Union u){
+		HashSet<Type> union_expanded = new HashSet<>();
+		for(Type t:u.getType_list()){
+			if(t instanceof Type.Named){
+				Type.Named n =(Type.Named)t;
+				WhileFile.TypeDecl decl = this.types.get(n.getName());
+				Type t1 = decl.getType();
+				if(t1 instanceof Type.Union){
+					Type.Union u1 = expandUnion((Type.Union) t1);
+					union_expanded.addAll(u1.getType_list());
+				}else {
+					union_expanded.add(t1);
+				}
+			}else{
+				union_expanded.add(t);
+			}
+		}
+		return new Type.Union(union_expanded);
+	}
+
+	/**
+	 * Check if a union contains a pair
+	 * @param u
+	 * @param p
+	 * @param element
+	 * @return
+	 */
+	private boolean Recordcontains(Type.Record superR,Type.Record subR,SyntacticElement element){
+		List<Pair<Type,String>> superRFields = superR.getFields();
+		List<Pair<Type,String>> subRFields = subR.getFields();
+		for(Pair<Type,String> subp:subRFields){
+			//if a pair in sub it should exist in super
+			boolean match = false;
+			for(Pair<Type,String> superp:superRFields){
+				if((isSubtype(superp.first(),subp.first(),element) && superp.second().equals(subp.second()))){
+					match = true;
+				}
+			}
+			if(!match){
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

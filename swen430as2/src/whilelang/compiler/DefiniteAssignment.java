@@ -262,7 +262,9 @@ public class DefiniteAssignment {
 			check((Expr.Unary) expr, environment);
 		} else if (expr instanceof Expr.Variable) {
 			check((Expr.Variable) expr, environment);
-		} else {
+		}else if (expr instanceof Expr.Cast) {
+			check((Expr.Cast) expr, environment);
+		}  else {
 			internalFailure("unknown expression encountered (" + expr + ")", file.filename, expr);
 		}
 	}
@@ -317,6 +319,10 @@ public class DefiniteAssignment {
 			// This variable is not definitely assigned.
 			syntaxError("DA01", "variable " + expr.getName() + " is not definitely assigned", file.filename, expr);
 		}
+	}
+
+	public void check(Expr.Cast expr, Defs environment) {
+		check(expr.getExpr(),environment);
 	}
 
 	private class ControlFlow {

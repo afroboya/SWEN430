@@ -612,6 +612,7 @@ public class Parser {
 	private Expr parseExpr(Context context) {
 		checkNotEof();
 		int start = index;
+
 		Expr c1 = parseRelationalExpr(context);
 		if (tokens.get(index) instanceof LogicalAnd) {
 			match("&&");
@@ -622,6 +623,7 @@ public class Parser {
 			Expr c2 = parseExpr(context);
 			return new Expr.Binary(Expr.BOp.OR, c1, c2, sourceAttr(start, index - 1));
 		}
+
 		return c1;
 	}
 
@@ -725,19 +727,56 @@ public class Parser {
 		return lhs;
 	}
 
+	private Expr parseCast(Context context){
+		Token token = tokens.get(index);
+
+		if(token instanceof LeftBrace) {
+			match("(");
+			Type t;
+			try {
+				t = parseType();
+			}catch (SyntaxError e){
+				return null;
+			}
+			match(")");
+			Expr expr = parseExpr(context);
+
+			Expr e = new Expr.Cast(t, expr);
+			return e;
+
+		}
+		return null;
+	}
+
 	private Expr parseTerm(Context context) {
 		checkNotEof();
 
 		int start = index;
 		Token token = tokens.get(index);
 
-		if (token instanceof LeftBrace) {
-			match("(");
-			Expr e = parseExpr(context);
-			checkNotEof();
-			match(")");
+
+
+		//
+		if(token instanceof LeftBrace) {
+			int startIndex = index;
+			Expr e = parseCast(context);
+
+			if(e==null ) {
+				index = startIndex;
+				match("(");
+				e = parseExpr(context);
+				match(")");
+			}
 			return e;
-		} else if ((index + 1) < tokens.size() && token instanceof Identifier
+		}
+
+//
+//		Expr e = parseCast(context);
+//
+//		if(e!=null){
+//			return e;
+//		}
+		if ((index + 1) < tokens.size() && token instanceof Identifier
 				&& tokens.get(index + 1) instanceof LeftBrace) {
 			// must be a method invocation
 			return parseInvokeExprOrStmt(context);
@@ -920,6 +959,13 @@ public class Parser {
 		// Determine base type
 		Type type = parseBaseType();
 
+		// Determine array level (if any)
+		while (tokens.get(index) instanceof LeftSquare) {
+			match("[");
+			match("]");
+			type = new Type.Array(type, sourceAttr(start, index - 1));
+		}
+
 		Token token = tokens.get(index);
 		if(token instanceof Bar){
 			index++;
@@ -928,12 +974,6 @@ public class Parser {
 			list_type.add(type);
 			list_type.add(t);
 			return new Type.Union(list_type);
-		}
-		// Determine array level (if any)
-		while (tokens.get(index) instanceof LeftSquare) {
-			match("[");
-			match("]");
-			type = new Type.Array(type, sourceAttr(start, index - 1));
 		}
 		// Done
 		return type;

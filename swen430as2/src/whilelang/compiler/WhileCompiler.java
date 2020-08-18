@@ -43,13 +43,10 @@ public class WhileCompiler {
 		Lexer lexer = new Lexer(srcFile.getPath());
 		Parser parser = new Parser(srcFile.getPath(), lexer.scan());
 		WhileFile ast = parser.read();
-
 		// Second, type checking
 		new TypeChecker().check(ast);
-
 		// Third, unreachable code
 		new UnreachableCode().check(ast);
-
 		// Fourth, definite assignment
 		new DefiniteAssignment().check(ast);
 		

@@ -40,6 +40,7 @@ import whilelang.util.SyntacticElement;
  */
 public interface Type extends SyntacticElement {
 
+
 	/**
 	 * Represents the special <code>void</code> type which can only be used in
 	 * special circumstance (e.g. for a function return).

@@ -28,6 +28,7 @@ import java.util.Map;
 
 import whilelang.ast.Expr;
 import whilelang.ast.Stmt;
+import whilelang.ast.Type;
 import whilelang.ast.WhileFile;
 
 /**
@@ -305,7 +306,9 @@ public class Interpreter {
 			return execute((Expr.Unary) expr,frame);
 		} else if(expr instanceof Expr.Variable) {
 			return execute((Expr.Variable) expr,frame);
-		} else {
+		}else if(expr instanceof Expr.Cast) {
+			return execute((Expr.Cast) expr,frame);
+		}  else {
 			internalFailure("unknown expression encountered (" + expr + ")", file.filename,expr);
 			return null;
 		}
@@ -463,6 +466,68 @@ public class Interpreter {
 	private Object execute(Expr.Variable expr, HashMap<String,Object> frame) {
 		return frame.get(expr.getName());
 	}
+
+	private Object execute(Expr.Cast expr, HashMap<String,Object> frame) {
+		Object o = execute(expr.getExpr(),frame);
+		if(checkInstance(expr.getCastType(),o)){
+			return o;
+		}
+		throw new RuntimeException("cannot cast: "+o+" to"+ expr.getCastType());
+	}
+
+	private boolean checkInstance(Type t,Object o){
+		if(t instanceof Type.Void) {
+			return o == null;
+		}else if(t instanceof Type.Null) {
+			return o == null;
+		}else if(t instanceof Type.Bool) {
+			return o instanceof Boolean;
+		}else if(t instanceof Type.Int) {
+			return o instanceof Integer;
+		}else if(t instanceof Type.Named) {
+			Type.Named n = (Type.Named)t;
+			WhileFile.Decl declaration = this.declarations.get(n.getName());
+			if(declaration instanceof WhileFile.TypeDecl){
+				return checkInstance(((WhileFile.TypeDecl) declaration).getType(),o);
+			}
+			return false;
+		}else if(t instanceof Type.Array) {
+			return o instanceof ArrayList;
+		}else if(t instanceof Type.Record) {
+			//convert t to map
+			HashMap<String,Type> recordMap = new HashMap<>();
+			for(Pair<Type,String> p:((Type.Record) t).getFields()){
+				recordMap.put(p.second(),p.first());
+			}
+
+			if(o instanceof HashMap){
+				HashMap<String,Object> objectHashMap = (HashMap<String, Object>)o;
+
+				for (Map.Entry<String, Type> entry : recordMap.entrySet()) {
+					String key = entry.getKey();
+					Type value = entry.getValue();
+					Object o1 = objectHashMap.get(key);
+					if (!checkInstance(value, o1)) {
+						return false;
+					}
+				}
+				return true;
+			}
+
+			return false;
+		}else if(t instanceof Type.Union) {
+			Type.Union u = (Type.Union)t;
+			for(Type union_type:u.getType_list()){
+				if(checkInstance(union_type,o)){
+					return true;
+				}
+			}
+			return false;
+		}
+		throw new RuntimeException("unknown cast type");
+	}
+
+
 
 	/**
 	 * Perform a deep clone of the given object value. This is either a

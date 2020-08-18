@@ -45,6 +45,33 @@ public interface Expr extends SyntacticElement {
 	public interface LVal extends Expr {
 	}
 
+	public static class Cast extends SyntacticElement.Impl implements Expr{
+
+		private final Type castType;
+		private final Expr expr;
+
+		public Cast(Type castType,Expr expr, Attribute... attributes) {
+			super(attributes);
+			this.castType = castType;
+			this.expr = expr;
+		}
+
+		public Type getCastType() {
+			return castType;
+		}
+
+		public Expr getExpr() {
+			return expr;
+		}
+
+		@Override
+		public String toString() {
+			return "("+castType.toString()+")"+" "+expr.toString();
+		}
+
+
+	}
+
 	/**
 	 * Represents a single occurrence of a variable within a expression. For
 	 * example, the expression <code>x+x+y</code> will contain three instances
