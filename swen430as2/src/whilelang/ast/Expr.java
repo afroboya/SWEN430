@@ -72,6 +72,32 @@ public interface Expr extends SyntacticElement {
 
 	}
 
+	public static class Is extends SyntacticElement.Impl implements Expr{
+
+		private final Type isType;
+		private final Expr expr;
+
+		public Is(Type isType,Expr expr, Attribute... attributes) {
+			super(attributes);
+			this.isType = isType;
+			this.expr = expr;
+		}
+
+		public Type getIsType() {
+			return isType;
+		}
+
+		public Expr getExpr() {
+			return expr;
+		}
+
+		@Override
+		public String toString() {
+			return expr.toString()+"is: "+isType.toString();
+		}
+
+
+	}
 	/**
 	 * Represents a single occurrence of a variable within a expression. For
 	 * example, the expression <code>x+x+y</code> will contain three instances

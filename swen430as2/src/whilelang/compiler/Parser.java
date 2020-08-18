@@ -520,6 +520,20 @@ public class Parser {
 		return new Stmt.Switch(expr, cases, sourceAttr(start, end - 1));
 	}
 
+	private Stmt parseIsStmt(Context context) {
+		int start = index;
+		matchKeyword("switch");
+		match("(");
+		Expr expr = parseExpr(context);
+		match(")");
+		int end = index;
+		match("{");
+		List<Stmt.Case> cases = parseSwitchCases(context.setInSwitch());
+		match("}");
+
+		return new Stmt.Switch(expr, cases, sourceAttr(start, end - 1));
+	}
+
 	private Stmt parseBreakStmt(Context context) {
 		int start = index;
 		Keyword k = matchKeyword("break");
@@ -614,11 +628,16 @@ public class Parser {
 		int start = index;
 
 		Expr c1 = parseRelationalExpr(context);
-		if (tokens.get(index) instanceof LogicalAnd) {
+		Token t =tokens.get(index);
+		if (t instanceof Keyword && "is".equals(((Keyword)t).text)){
+			match("is");
+			Type c2 = parseType();
+			return new Expr.Is(c2,c1, sourceAttr(start, index - 1));
+		}else if (t instanceof LogicalAnd) {
 			match("&&");
 			Expr c2 = parseExpr(context);
 			return new Expr.Binary(Expr.BOp.AND, c1, c2, sourceAttr(start, index - 1));
-		} else if (tokens.get(index) instanceof LogicalOr) {
+		} else if (t instanceof LogicalOr) {
 			match("||");
 			Expr c2 = parseExpr(context);
 			return new Expr.Binary(Expr.BOp.OR, c1, c2, sourceAttr(start, index - 1));
@@ -754,9 +773,6 @@ public class Parser {
 		int start = index;
 		Token token = tokens.get(index);
 
-
-
-		//
 		if(token instanceof LeftBrace) {
 			int startIndex = index;
 			Expr e = parseCast(context);

@@ -94,6 +94,7 @@ public class Interpreter {
 
 	private Object execute(List<Stmt> block, HashMap<String,Object> frame) {
 		for(int i=0;i!=block.size();i=i+1) {
+			System.out.println("i: "+i);
 			Object r = execute(block.get(i),frame);
 			if(r != null) {
 				return r;
@@ -308,6 +309,8 @@ public class Interpreter {
 			return execute((Expr.Variable) expr,frame);
 		}else if(expr instanceof Expr.Cast) {
 			return execute((Expr.Cast) expr,frame);
+		} else if(expr instanceof Expr.Is) {
+			return execute((Expr.Is) expr,frame);
 		}  else {
 			internalFailure("unknown expression encountered (" + expr + ")", file.filename,expr);
 			return null;
@@ -475,6 +478,15 @@ public class Interpreter {
 		throw new RuntimeException("cannot cast: "+o+" to"+ expr.getCastType());
 	}
 
+	private Object execute(Expr.Is expr, HashMap<String,Object> frame) {
+		Object o = execute(expr.getExpr(),frame);
+		if(checkInstance(expr.getIsType(),o)){
+			return true;
+		}
+		return false;
+	}
+
+
 	private boolean checkInstance(Type t,Object o){
 		if(t instanceof Type.Void) {
 			return o == null;
@@ -492,7 +504,15 @@ public class Interpreter {
 			}
 			return false;
 		}else if(t instanceof Type.Array) {
-			return o instanceof ArrayList;
+			if(!(o instanceof ArrayList)){
+				return false;
+			}
+			for(Object o1:(ArrayList)o) {
+				if(!checkInstance(((Type.Array) t).getElement(), o1)) {
+					return false;
+				}
+			}
+			return true;
 		}else if(t instanceof Type.Record) {
 			//convert t to map
 			HashMap<String,Type> recordMap = new HashMap<>();

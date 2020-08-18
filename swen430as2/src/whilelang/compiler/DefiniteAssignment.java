@@ -264,6 +264,8 @@ public class DefiniteAssignment {
 			check((Expr.Variable) expr, environment);
 		}else if (expr instanceof Expr.Cast) {
 			check((Expr.Cast) expr, environment);
+		}else if (expr instanceof Expr.Is) {
+			check((Expr.Is) expr, environment);
 		}  else {
 			internalFailure("unknown expression encountered (" + expr + ")", file.filename, expr);
 		}
@@ -322,6 +324,10 @@ public class DefiniteAssignment {
 	}
 
 	public void check(Expr.Cast expr, Defs environment) {
+		check(expr.getExpr(),environment);
+	}
+
+	public void check(Expr.Is expr, Defs environment) {
 		check(expr.getExpr(),environment);
 	}
 

@@ -235,7 +235,9 @@ public class TypeChecker {
 			type = check((Expr.Variable) expr, environment);
 		}else if(expr instanceof Expr.Cast) {
 			type = check((Expr.Cast) expr, environment);
-		} else {
+		}else if(expr instanceof Expr.Is) {
+			type = check((Expr.Is) expr, environment);
+		}  else {
 			internalFailure("unknown expression encountered (" + expr + ")", file.filename,expr);
 			return null; // dead code
 		}
@@ -398,6 +400,12 @@ public class TypeChecker {
 		Type cast_type = cast_expr.getCastType();
 		checkSubtype(expr_type,cast_type,cast_expr);
 		return cast_type;
+	}
+
+	public Type check(Expr.Is expr, Map<String, Type> environment) {
+		Type expr_type = check(expr.getExpr(),environment);
+		checkSubtype(expr_type,expr.getIsType(),expr);
+		return new Type.Bool();
 	}
 
 	/**
