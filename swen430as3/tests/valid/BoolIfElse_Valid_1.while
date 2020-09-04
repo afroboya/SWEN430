@@ -1,0 +1,14 @@
+type string is int[]
+
+string f(bool b){
+    if(b) {
+        return "TRUE";
+    } else {
+        return "FALSE";
+    }
+}
+
+void main() {
+    assert f(true) == "TRUE";
+    assert f(false) == "FALSE";
+}
