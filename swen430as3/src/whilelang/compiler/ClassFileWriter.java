@@ -1,12 +1,7 @@
 package whilelang.compiler;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import jasm.attributes.SourceFile;
 import jasm.lang.Bytecode;
@@ -191,16 +186,120 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Stmt.Break stmt, Context context, List<Bytecode> bytecodes) {
-
+		String label = context.viewMostRecentLoop().get(EXIT_TEXT);
+		bytecodes.add(new Bytecode.Goto(label));
 	}
 
 	private void translate(Stmt.Continue stmt, Context context, List<Bytecode> bytecodes) {
-
+		String label = context.viewMostRecentLoop().get(INCREMENTAL_TEXT);
+		bytecodes.add(new Bytecode.Goto(label));
 	}
 
+	private final String CONDITIONAL_TEXT = "conditional";
+	private final String INCREMENTAL_TEXT = "incremental";
+	private final String EXIT_TEXT = "exit";
 	private void translate(Stmt.For stmt, Context context, List<Bytecode> bytecodes) {
+		//set up for
+		translate(stmt.getDeclaration(),context,bytecodes);
+
+		Attribute.Type attr = stmt.getCondition().attribute(Attribute.Type.class);
+		JvmType type = toJvmType(attr.type);
+
+
+		String trueLabel, exitLabel,conditionLabel,incrementLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		incrementLabel = freshLabel()+"_increment";
+		trueLabel = freshLabel()+"_true";
+		exitLabel = freshLabel()+"_exit";
+
+		HashMap<String,String> loop_details = new HashMap<>();
+		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(INCREMENTAL_TEXT,incrementLabel);
+		loop_details.put(EXIT_TEXT,exitLabel);
+		context.addLoop(loop_details);
+
+		//check condition
+		bytecodes.add(new Bytecode.Label(conditionLabel));
+		translate(stmt.getCondition(),context,bytecodes);
+		bytecodes.add(new Bytecode.If(IfMode.NE, trueLabel));
+		bytecodes.add(new Bytecode.Goto(exitLabel));
+		//cond is true, run body and increment
+		bytecodes.add(new Bytecode.Label(trueLabel));
+
+		for(Stmt s:stmt.getBody()){
+			translate(s,context,bytecodes);
+		}
+		//increment
+		bytecodes.add(new Bytecode.Label(incrementLabel));
+		translate(stmt.getIncrement(),context,bytecodes);
+		//check cond
+		bytecodes.add(new Bytecode.Goto(conditionLabel));
+
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
+		System.out.println(context.loopManagement);
+		System.out.println(context.environment);
+		System.out.println("done: "+bytecodes);
+		context.removeLoop();
+
+
+
+//		mp.bc.add(new Bytecode.Label(startLabel));
+//		addBytecodes(statement.getCondition(), mp);
+//		mp.bc.add(new Bytecode.If(Bytecode.IfMode.EQ, endLabel));
+//		addBytecodes(statement.getBody(), mp);
+//		addBytecodes(statement.getIncrement(),mp);
+//		mp.bc.add(new Bytecode.Goto(startLabel));
+//		mp.bc.add(new Bytecode.Label(endLabel));
+
+
+
+
+
+//		String trueBranch = freshLabel();
+//		String exitLabel = freshLabel();
+//		translate(stmt.getCondition(),context,bytecodes);
+//		bytecodes.add(new Bytecode.If(IfMode.NE, trueBranch));
+//		// translate the false branch
+//		translate(stmt.getFalseBranch(),context,bytecodes);
+//		if(!allPathsReturn(stmt.getFalseBranch())) {
+//			bytecodes.add(new Bytecode.Goto(exitLabel));
+//		}
+//		// translate true branch
+//		bytecodes.add(new Bytecode.Label(trueBranch));
+//		translate(stmt.getTrueBranch(),context,bytecodes);
+//		bytecodes.add(new Bytecode.Label(exitLabel));
+
 
 	}
+
+	private Integer convertComparisonOperator(Expr.BOp operator){
+		switch (operator){
+			case AND:
+			case OR:
+			case ADD:
+			case SUB:
+			case MUL:
+			case DIV:
+			case REM:
+				//error
+				throw new RuntimeException("Error: got unexpected operator "+operator);
+			case EQ:
+				return Bytecode.IfCmp.EQ;
+			case NEQ:
+				return Bytecode.IfCmp.NE;
+			case LT:
+				return Bytecode.IfCmp.LT;
+			case LTEQ:
+				return Bytecode.IfCmp.LE;
+			case GT:
+				return Bytecode.IfCmp.GT;
+			case GTEQ:
+				return Bytecode.IfCmp.GE;
+		}
+		throw new RuntimeException("Error: got unexpected operator "+operator);
+	}
+
 
 	private void translate(Stmt.IfElse stmt, Context context, List<Bytecode> bytecodes) {
 		String trueBranch = freshLabel();
@@ -324,10 +423,14 @@ public class ClassFileWriter {
 
 	private void translate(Expr.ArrayInitialiser expr, Context context, List<Bytecode> bytecodes) {
 	//FIXME to do
+		for(Expr arg_expr:expr.getArguments()) {
+			translate(arg_expr,context,bytecodes);
+		}
 
 	}
 
-	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {Attribute.Type attr = expr.getLhs().attribute(Attribute.Type.class);
+	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
+		Attribute.Type attr = expr.getLhs().attribute(Attribute.Type.class);
 		JvmType type = toJvmType(attr.type);
 
 		Expr lhs = expr.getLhs();
@@ -361,64 +464,27 @@ public class ClassFileWriter {
 				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.REM, type));
 				break;
 			case EQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.EQ, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
 			case NEQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.NE, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
 			case LT:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.LT, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
 			case LTEQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.LE, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
 			case GT:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.GT, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
 			case GTEQ:
 				trueLabel = freshLabel();
 				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.GE, type, trueLabel));
+				int op = convertComparisonOperator(expr.getOp());
+				bytecodes.add(new Bytecode.IfCmp(op, type, trueLabel));
 				bytecodes.add(new Bytecode.LoadConst(false));
 				bytecodes.add(new Bytecode.Goto(falseLabel));
 				bytecodes.add(new Bytecode.Label(trueLabel));
 				bytecodes.add(new Bytecode.LoadConst(true));
 				bytecodes.add(new Bytecode.Label(falseLabel));
+
+//				bytecodes.add(new Bytecode.IfCmp(op, type, trueLabel));
+//				bytecodes.add(new Bytecode.LoadConst(false));
+//				bytecodes.add(new Bytecode.Goto(falseLabel));
+//				bytecodes.add(new Bytecode.Label(trueLabel));
+//				bytecodes.add(new Bytecode.LoadConst(true));
+//				bytecodes.add(new Bytecode.Label(falseLabel));
 				break;
 			default:
 				throw new IllegalArgumentException("unknown binary operator encountered");
@@ -715,7 +781,12 @@ public class ClassFileWriter {
 		return "label" + fresh++;
 	}
 
+	private String freshLoopLabel() {
+		return "loop_label" + loop_count++;
+	}
+
 	private static int fresh = 0;
+	private static int loop_count=0;
 
 	/**
 	 * Convert a While type into its JVM type.
@@ -791,14 +862,18 @@ public class ClassFileWriter {
 		 */
 		private final Map<String,Integer> environment;
 
+		private final Deque<Map<String,String>> loopManagement;
+
 		public Context(JvmType.Clazz enclosingClass, Map<String,Integer> environment) {
 			this.enclosingClass = enclosingClass;
 			this.environment = environment;
+			this.loopManagement = new ArrayDeque<>();
 		}
 
 		public Context(Context context) {
 			this.enclosingClass = context.enclosingClass;
 			this.environment = new HashMap<String,Integer>(context.environment);
+			this.loopManagement = new ArrayDeque<>(context.loopManagement);
 		}
 
 		/**
@@ -835,5 +910,20 @@ public class ClassFileWriter {
 			return environment.get(var);
 		}
 
+		public void addLoop(HashMap<String,String> loop){
+			loopManagement.add(loop);
+		}
+
+		public Map<String,String> viewMostRecentLoop(){
+			return loopManagement.peek();
+		}
+
+		public void removeLoop(){
+			loopManagement.poll();
+		}
+
 	}
+
+
+
 }
