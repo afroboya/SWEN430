@@ -1,0 +1,7 @@
+void main() {
+	print 1;
+	print true;
+	print "Hello World";
+	print [1,2,3];
+	print {a: 2, b: [1]};
+}

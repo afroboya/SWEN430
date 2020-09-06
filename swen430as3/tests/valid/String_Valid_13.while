@@ -1,0 +1,9 @@
+type string is int[]
+
+string f(string s1) {
+     return s1;
+}
+void main() {
+    string s = "Hello World";
+    assert f(s) == s;
+}

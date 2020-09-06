@@ -1,0 +1,6 @@
+
+void main() {
+    int[] s1 = "Hello";
+    int[] s2 = "World";
+    assert s1 != s2;
+}
