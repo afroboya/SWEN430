@@ -13,6 +13,9 @@ import jasm.lang.Modifier;
 
 import whilelang.ast.*;
 
+import static jasm.lang.Bytecode.InvokeMode.STATIC;
+import static jasm.lang.Bytecode.InvokeMode.VIRTUAL;
+
 /**
  * Responsible for translating a While source file into a JVM Class file.
  *
@@ -110,6 +113,7 @@ public class ClassFileWriter {
 		// Finally, add the jvm Code attribute to this method
 		cm.attributes().add(code);
 		// Done
+		System.out.println("final: "+bytecodes);
 		return cm;
 	}
 
@@ -202,10 +206,6 @@ public class ClassFileWriter {
 		//set up for
 		translate(stmt.getDeclaration(),context,bytecodes);
 
-		Attribute.Type attr = stmt.getCondition().attribute(Attribute.Type.class);
-		JvmType type = toJvmType(attr.type);
-
-
 		String trueLabel, exitLabel,conditionLabel,incrementLabel;
 		conditionLabel = freshLabel()+"_conditional";
 		incrementLabel = freshLabel()+"_increment";
@@ -241,49 +241,24 @@ public class ClassFileWriter {
 		System.out.println(context.environment);
 		System.out.println("done: "+bytecodes);
 		context.removeLoop();
-
-
-
-//		mp.bc.add(new Bytecode.Label(startLabel));
-//		addBytecodes(statement.getCondition(), mp);
-//		mp.bc.add(new Bytecode.If(Bytecode.IfMode.EQ, endLabel));
-//		addBytecodes(statement.getBody(), mp);
-//		addBytecodes(statement.getIncrement(),mp);
-//		mp.bc.add(new Bytecode.Goto(startLabel));
-//		mp.bc.add(new Bytecode.Label(endLabel));
-
-
-
-
-
-//		String trueBranch = freshLabel();
-//		String exitLabel = freshLabel();
-//		translate(stmt.getCondition(),context,bytecodes);
-//		bytecodes.add(new Bytecode.If(IfMode.NE, trueBranch));
-//		// translate the false branch
-//		translate(stmt.getFalseBranch(),context,bytecodes);
-//		if(!allPathsReturn(stmt.getFalseBranch())) {
-//			bytecodes.add(new Bytecode.Goto(exitLabel));
-//		}
-//		// translate true branch
-//		bytecodes.add(new Bytecode.Label(trueBranch));
-//		translate(stmt.getTrueBranch(),context,bytecodes);
-//		bytecodes.add(new Bytecode.Label(exitLabel));
-
-
 	}
 
 	private Integer convertComparisonOperator(Expr.BOp operator){
 		switch (operator){
 			case AND:
+				return Bytecode.BinOp.AND;
 			case OR:
+				return Bytecode.BinOp.OR;
 			case ADD:
+				return Bytecode.BinOp.ADD;
 			case SUB:
+				return Bytecode.BinOp.SUB;
 			case MUL:
+				return Bytecode.BinOp.MUL;
 			case DIV:
+				return Bytecode.BinOp.DIV;
 			case REM:
-				//error
-				throw new RuntimeException("Error: got unexpected operator "+operator);
+				return Bytecode.BinOp.REM;
 			case EQ:
 				return Bytecode.IfCmp.EQ;
 			case NEQ:
@@ -299,7 +274,6 @@ public class ClassFileWriter {
 		}
 		throw new RuntimeException("Error: got unexpected operator "+operator);
 	}
-
 
 	private void translate(Stmt.IfElse stmt, Context context, List<Bytecode> bytecodes) {
 		String trueBranch = freshLabel();
@@ -319,6 +293,32 @@ public class ClassFileWriter {
 
 	private void translate(Stmt.While stmt, Context context, List<Bytecode> bytecodes) {
 
+		String trueLabel, exitLabel,conditionLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		trueLabel = freshLabel()+"_true";
+		exitLabel = freshLabel()+"_exit";
+
+		HashMap<String,String> loop_details = new HashMap<>();
+		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(EXIT_TEXT,exitLabel);
+		context.addLoop(loop_details);
+
+		//check condition
+		bytecodes.add(new Bytecode.Label(conditionLabel));
+		translate(stmt.getCondition(),context,bytecodes);
+		bytecodes.add(new Bytecode.If(IfMode.NE, trueLabel));
+		bytecodes.add(new Bytecode.Goto(exitLabel));
+		//cond is true, run body and increment
+		bytecodes.add(new Bytecode.Label(trueLabel));
+		for(Stmt s:stmt.getBody()){
+			translate(s,context,bytecodes);
+		}
+		//check cond
+		bytecodes.add(new Bytecode.Goto(conditionLabel));
+
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
+		context.removeLoop();
 	}
 
 	private void translate(Stmt.Return stmt, Context context, List<Bytecode> bytecodes) {
@@ -336,6 +336,55 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Stmt.Switch stmt, Context context, List<Bytecode> bytecodes) {
+		String exitLabel,conditionLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		exitLabel = freshLabel()+"_exit";
+
+		HashMap<String,String> loop_details = new HashMap<>();
+		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(EXIT_TEXT,exitLabel);
+		context.addLoop(loop_details);
+
+		//assuming expressions is of type Variable or an array or record access. Regardless, it should reduce down to a
+		Object value = context.getRegister(stmt.getExpr().toString());
+
+		Attribute.Type attr = stmt.getExpr().attribute(Attribute.Type.class);
+		JvmType type = toJvmType(attr.type);
+
+
+		//Generate labels for each case
+		HashMap<Stmt.Case,String> case_to_label = new HashMap<>();
+		for(Stmt.Case switch_case:stmt.getCases()){
+			String label = freshLabel()+"_"+switch_case.toString();
+			case_to_label.put(switch_case,label);
+		}
+
+		for(Stmt.Case switch_case:stmt.getCases()){
+			String label = case_to_label.get(switch_case);
+			//put value on stack
+			if(switch_case.isDefault()){
+				System.out.println(switch_case.toString());
+				bytecodes.add(new Bytecode.Goto(label));
+			}else {
+				translate(stmt.getExpr(), context, bytecodes);
+				translate(switch_case.getValue(), context, bytecodes);
+				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.EQ, type, label));
+			}
+		}
+		//after checking all cases with no break or return, should go to exit
+		bytecodes.add(new Bytecode.Goto(context.viewMostRecentLoop().get(EXIT_TEXT)));
+
+		//label: body
+		for(Stmt.Case switch_case:stmt.getCases()){
+			bytecodes.add(new Bytecode.Label(case_to_label.get(switch_case)));
+			translate(switch_case.getBody(),context,bytecodes);
+		}
+
+		//any break will go to here
+		bytecodes.add(new Bytecode.Label(context.viewMostRecentLoop().get(EXIT_TEXT)));
+
+		context.removeLoop();
+
 
 	}
 
@@ -417,16 +466,38 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.ArrayGenerator expr, Context context, List<Bytecode> bytecodes) {
-		//FIXME to do
+		//FIXME to do -> make sure it has "add array" for context
+		System.out.println("generator");
+
 
 	}
 
 	private void translate(Expr.ArrayInitialiser expr, Context context, List<Bytecode> bytecodes) {
-	//FIXME to do
-		for(Expr arg_expr:expr.getArguments()) {
-			translate(arg_expr,context,bytecodes);
-		}
+		constructObject(JAVA_UTIL_ARRAYLIST,bytecodes);
 
+		String name = freshLabel()+"_array";
+		int reg_index = context.declareRegister(name);
+		bytecodes.add(new Bytecode.Store(reg_index,JAVA_UTIL_ARRAYLIST));
+
+		for(Expr o:expr.getArguments()){
+			Attribute.Type attr = o.attribute(Attribute.Type.class);
+			Type t = attr.type;
+			//get array
+			bytecodes.add(new Bytecode.Load(reg_index, JAVA_UTIL_ARRAYLIST));
+			//put on stack
+			translate(o,context,bytecodes);
+			//convert to object
+			boxAsNecessary(t,bytecodes);
+			JvmType.Function boxMethodType =
+					new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
+
+			//add object to array
+			bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "add", boxMethodType,VIRTUAL));
+			//pop
+			bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
+		}
+		//leave on top of array
+		bytecodes.add(new Bytecode.Load(reg_index, JAVA_UTIL_ARRAYLIST));
 	}
 
 	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
@@ -443,25 +514,14 @@ public class ClassFileWriter {
 
 		switch (expr.getOp()) {
 			case AND:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.AND, type));
-				break;
 			case OR:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.OR, type));
-				break;
 			case ADD:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.ADD, type));
-				break;
 			case SUB:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.SUB, type));
-				break;
 			case MUL:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.MUL, type));
-				break;
 			case DIV:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.DIV, type));
-				break;
 			case REM:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.REM, type));
+				int binOp = convertComparisonOperator(expr.getOp());
+				bytecodes.add(new Bytecode.BinOp(binOp, type));
 				break;
 			case EQ:
 			case NEQ:
@@ -478,13 +538,6 @@ public class ClassFileWriter {
 				bytecodes.add(new Bytecode.Label(trueLabel));
 				bytecodes.add(new Bytecode.LoadConst(true));
 				bytecodes.add(new Bytecode.Label(falseLabel));
-
-//				bytecodes.add(new Bytecode.IfCmp(op, type, trueLabel));
-//				bytecodes.add(new Bytecode.LoadConst(false));
-//				bytecodes.add(new Bytecode.Goto(falseLabel));
-//				bytecodes.add(new Bytecode.Label(trueLabel));
-//				bytecodes.add(new Bytecode.LoadConst(true));
-//				bytecodes.add(new Bytecode.Label(falseLabel));
 				break;
 			default:
 				throw new IllegalArgumentException("unknown binary operator encountered");
@@ -500,6 +553,7 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.IndexOf expr, Context context, List<Bytecode> bytecodes) {
+		//getting value out of array
 
 	}
 
@@ -509,7 +563,7 @@ public class ClassFileWriter {
 		for(int i=0;i!=arguments.size();++i) {
 			translate(arguments.get(i),context,bytecodes);
 		}
-		bytecodes.add(new Bytecode.Invoke(context.getEnclosingClass(), expr.getName(), type, Bytecode.InvokeMode.STATIC));
+		bytecodes.add(new Bytecode.Invoke(context.getEnclosingClass(), expr.getName(), type, STATIC));
 	}
 
 	private void translate(Expr.RecordAccess expr, Context context, List<Bytecode> bytecodes) {
@@ -530,8 +584,12 @@ public class ClassFileWriter {
 		case NEG:
 			bytecodes.add(new Bytecode.Neg(JvmTypes.INT));
 			break;
+		case LENGTHOF:
+			//array already on stack, translate call above
+			bytecodes.add(new Bytecode.ArrayLength());
+			break;
 		default:
-			throw new IllegalArgumentException("unknown unary operator encountered");
+			throw new IllegalArgumentException("unknown unary operator encountered: "+expr.toString());
 		}
 	}
 
@@ -648,7 +706,7 @@ public class ClassFileWriter {
 		String boxMethodName = "valueOf";
 		JvmType.Function boxMethodType = new JvmType.Function(owner,jvmType);
 		bytecodes.add(new Bytecode.Invoke(owner, boxMethodName, boxMethodType,
-				Bytecode.InvokeMode.STATIC));
+				STATIC));
 	}
 
 	/**
@@ -732,6 +790,7 @@ public class ClassFileWriter {
 		// convert the return type
 		JvmType returnType = toJvmType(method.getRet());
 		//
+		System.out.println("return type is: "+returnType);
 		JvmType.Function ft = new JvmType.Function(returnType, parameterTypes);
 		methodTypes.put(method.getName(), ft);
 		return ft;
@@ -750,6 +809,29 @@ public class ClassFileWriter {
 		int index = 0;
 		for(WhileFile.Parameter p : method.getParameters()) {
 			environment.put(p.getName(), index++);
+		}
+		return environment;
+	}
+
+	/**
+	 * Construct an initial context for the given method. In essence, this
+	 * just maps every parameter to the corresponding JVM register, as these are
+	 * automatically assigned by the JVM when the method is in invoked.
+	 *
+	 * @param method
+	 * @return
+	 */
+	private Map<String,JvmType> constructTypeEnvironment(WhileFile.MethodDecl method) {
+		HashMap<String,JvmType> environment = new HashMap<>();
+		int index = 0;
+		for(WhileFile.Parameter p : method.getParameters()) {
+			if(p.getType() instanceof Type.Array){
+				JvmType element_type = toJvmType(((Type.Array) p.getType()).getElement());
+				JvmType.Array array_type = new JvmType.Array(element_type);
+				environment.put(p.getName(),array_type);
+			}
+			//FIXME add records
+
 		}
 		return environment;
 	}
@@ -781,12 +863,8 @@ public class ClassFileWriter {
 		return "label" + fresh++;
 	}
 
-	private String freshLoopLabel() {
-		return "loop_label" + loop_count++;
-	}
 
 	private static int fresh = 0;
-	private static int loop_count=0;
 
 	/**
 	 * Convert a While type into its JVM type.
@@ -863,6 +941,8 @@ public class ClassFileWriter {
 		private final Map<String,Integer> environment;
 
 		private final Deque<Map<String,String>> loopManagement;
+		JvmType mostRecentType = null;
+
 
 		public Context(JvmType.Clazz enclosingClass, Map<String,Integer> environment) {
 			this.enclosingClass = enclosingClass;
