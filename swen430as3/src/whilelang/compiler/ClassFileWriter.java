@@ -540,13 +540,14 @@ public class ClassFileWriter {
 		translate(expr.getSize(),context,bytecodes);
 		bytecodes.add(new Bytecode.Load(increment_register,new JvmType.Int()));
 		//check condition
-		bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.LT, new JvmType.Int(), trueLabel));
+		bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.GT, new JvmType.Int(), trueLabel));
 		bytecodes.add(new Bytecode.Goto(exitLabel));
 		bytecodes.add(new Bytecode.Label(trueLabel));
 		//add item here
 		putInArray(expr.getValue(),array_reg_index,context,bytecodes);
+
 		//increment
-		new Bytecode.Iinc(increment_register,1);
+		bytecodes.add(new Bytecode.Iinc(increment_register,1));
 		//final stuff
 		bytecodes.add(new Bytecode.Goto(conditionLabel));
 		bytecodes.add(new Bytecode.Label(exitLabel));
