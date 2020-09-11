@@ -184,6 +184,29 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Label(label));
 	}
 
+	private void print_byte_info(JvmType t, Context context,List<Bytecode> bytecodes) {
+
+			//save existing value we are going to print
+
+			String s = freshLabel();
+			int reg = context.declareRegister(s);
+			bytecodes.add(new Bytecode.Store(reg,t));
+
+			JvmType.Clazz SYSTEM = new JvmType.Clazz("java.lang.System");
+
+			JvmType.Clazz PRINTSTREAM = new JvmType.Clazz("java.io", "PrintStream");
+
+			bytecodes.add(new Bytecode.GetField(SYSTEM, "out", PRINTSTREAM, Bytecode.FieldMode.STATIC));
+
+			bytecodes.add(new Bytecode.Load(reg,t));
+			JvmType.Function boxMethodType = new JvmType.Function(new JvmType.Void(), new JvmType.Int());
+			bytecodes.add(new Bytecode.Invoke(PRINTSTREAM, "println", boxMethodType, VIRTUAL));
+
+			//replace what we took to top of stack
+			bytecodes.add(new Bytecode.Load(reg,t));
+
+	}
+
 	private void translate(Stmt.Assign stmt, Context context, List<Bytecode> bytecodes) {
 		// translate assignment
 		translateAssignmentHelper(stmt.getLhs(),stmt.getRhs(),context,bytecodes);
@@ -327,6 +350,7 @@ public class ClassFileWriter {
 			translate(expr,context,bytecodes);
 			// Add return bytecode
 			bytecodes.add(new Bytecode.Return(toJvmType(attr.type)));
+
 		} else {
 			bytecodes.add(new Bytecode.Return(null));
 		}
@@ -386,11 +410,8 @@ public class ClassFileWriter {
 
 	private void translate(Stmt.VariableDeclaration stmt, Context context, List<Bytecode> bytecodes) {
 		Expr rhs = stmt.getExpr();
-		Attribute.Type attr = rhs.attribute(Attribute.Type.class);
-		Type t = attr.type;
-
 		// Declare the variable in the context
-		context.declareRegister(stmt.getName(),t);
+		context.declareRegister(stmt.getName());
 		//
 		if(rhs != null) {
 			Expr.LVal lhs = new Expr.Variable(stmt.getName());
@@ -422,7 +443,9 @@ public class ClassFileWriter {
 		//
 		if (lhs instanceof Expr.Variable) {
 			Expr.Variable var = (Expr.Variable) lhs;
+			//load the rhs
 			translate(rhs, context, bytecodes);
+			cloneAsNecessary(rhsType,bytecodes);
 			int register = context.getRegister(var.getName());
 			bytecodes.add(new Bytecode.Store(register, rhsType));
 		}else if(lhs instanceof Expr.IndexOf){
@@ -445,7 +468,6 @@ public class ClassFileWriter {
 
 			//pop element returned by set, we do not need it.
 			bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
-			System.out.println("current: "+bytecodes);
 		} else {
 			throw new IllegalArgumentException("unknown lval encountered: "+lhs.toString());
 		}
@@ -532,7 +554,6 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.ArrayInitialiser expr, Context context, List<Bytecode> bytecodes) {
-		System.out.println("arr initialiser");
 		constructObject(JAVA_UTIL_ARRAYLIST,bytecodes);
 
 		String name = freshLabel()+"_array";
@@ -544,6 +565,9 @@ public class ClassFileWriter {
 		}
 		//leave on top of array
 		bytecodes.add(new Bytecode.Load(reg_index, JAVA_UTIL_ARRAYLIST));
+//		print_byte_info(bytecodes.get(bytecodes.size()-1),context,bytecodes);
+
+//		print_byte_info(JAVA_UTIL_ARRAYLIST,context,bytecodes);
 	}
 
 	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
@@ -564,16 +588,10 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
 	}
 
-	private void translateArrCompare(Expr lhs,Expr rhs,Context context,List<Bytecode> bytecodes) {
-		//FIXME all untested
-		translate(lhs,context,bytecodes);
-		//get the load call from end of lhs translate
-		Bytecode lhs_arr_load = bytecodes.remove(bytecodes.size()-1);
-		translate(rhs,context,bytecodes);
-		//put lhs load just before rhs
-		bytecodes.add(bytecodes.size()-1,lhs_arr_load);
+	private void translateArrCompare(Expr lhs, Expr rhs, Expr.BOp operator, Context context, List<Bytecode> bytecodes) {
 
-		//now we have both load calls on top of stack
+		translate(lhs,context,bytecodes);
+		translate(rhs,context,bytecodes);
 
 		//check equality
 		JvmType.Function boxMethodType =
@@ -582,15 +600,25 @@ public class ClassFileWriter {
 		//returns 0(False) or 1(True)
 		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "equals", boxMethodType,VIRTUAL));
 
+		switch (operator){
+			case EQ:
+				return;
+			case NEQ:
+				translateNotHelper(bytecodes);
+				return;
+			default:
+				throw new IllegalArgumentException("unknown binary operator encountered");
+		}
 	}
 	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
+		//come here
 		Attribute.Type attr = expr.getLhs().attribute(Attribute.Type.class);
 		JvmType type = toJvmType(attr.type);
 
 		Expr lhs = expr.getLhs();
 		Expr rhs = expr.getRhs();
 		if(lhs instanceof Expr.ArrayGenerator || lhs instanceof Expr.ArrayInitialiser || rhs instanceof Expr.ArrayGenerator || rhs instanceof Expr.ArrayInitialiser){
-			translateArrCompare(lhs,rhs,context,bytecodes);
+			translateArrCompare(lhs,rhs,expr.getOp(),context,bytecodes);
 			return;
 		}else {
 			translate(lhs, context, bytecodes);
@@ -653,10 +681,8 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "get", boxMethodType,VIRTUAL));
 
 		//this should be an array type
-		Type.Array arr_type = (Type.Array)context.getType(expr.getSource().toString());
-		Type arr_element_type = arr_type.getElement();
-		System.out.println("arr_element_type: "+arr_element_type);
-		addReadConversion(arr_element_type,bytecodes);
+		Attribute.Type attr = expr.attribute(Attribute.Type.class);
+		addReadConversion(attr.type,bytecodes);
 
 	}
 
@@ -664,7 +690,11 @@ public class ClassFileWriter {
 		JvmType.Function type = methodTypes.get(expr.getName());
 		List<Expr> arguments = expr.getArguments();
 		for(int i=0;i!=arguments.size();++i) {
-			translate(arguments.get(i),context,bytecodes);
+			Expr e =  arguments.get(i);
+			translate(e,context,bytecodes);
+			Attribute.Type attr = e.attribute(Attribute.Type.class);
+			JvmType arg_type = toJvmType(attr.type);
+			cloneAsNecessary(arg_type,bytecodes);
 		}
 		bytecodes.add(new Bytecode.Invoke(context.getEnclosingClass(), expr.getName(), type, STATIC));
 	}
@@ -902,7 +932,6 @@ public class ClassFileWriter {
 		// convert the return type
 		JvmType returnType = toJvmType(method.getRet());
 		//
-		System.out.println("return type is: "+returnType);
 		JvmType.Function ft = new JvmType.Function(returnType, parameterTypes);
 		methodTypes.put(method.getName(), ft);
 		return ft;
@@ -1045,24 +1074,21 @@ public class ClassFileWriter {
 		 * Maps each declared variable to a jvm register index
 		 */
 		private final Map<String,Integer> environment;
-		private final Map<String,Type> arr_to_type;
 
 		private final Deque<Map<String,String>> loopManagement;
-		JvmType mostRecentType = null;
+
 
 
 		public Context(JvmType.Clazz enclosingClass, Map<String,Integer> environment,Map<String,Type> arr_to_type) {
 			this.enclosingClass = enclosingClass;
 			this.environment = environment;
 			this.loopManagement = new ArrayDeque<>();
-			this.arr_to_type = arr_to_type;
 		}
 
 		public Context(Context context) {
 			this.enclosingClass = context.enclosingClass;
 			this.environment = new HashMap<String,Integer>(context.environment);
 			this.loopManagement = new ArrayDeque<>(context.loopManagement);
-			this.arr_to_type = new HashMap<>(context.arr_to_type);
 		}
 
 		/**
@@ -1089,14 +1115,6 @@ public class ClassFileWriter {
 		}
 
 		/**
-		 * Declare variable with a type
-		 * **/
-		public int declareRegister(String var,Type type) {
-			arr_to_type.put(var,type);
-			return declareRegister(var);
-		}
-
-		/**
 		 * Return the register index associated with a given variable which has
 		 * been previously declared.
 		 *
@@ -1106,8 +1124,6 @@ public class ClassFileWriter {
 		public int getRegister(String var) {
 			return environment.get(var);
 		}
-
-		public Type getType(String var){return arr_to_type.get(var);}
 
 		public void addLoop(HashMap<String,String> loop){
 			loopManagement.add(loop);
