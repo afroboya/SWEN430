@@ -113,7 +113,9 @@ public class ClassFileWriter {
 		// Finally, add the jvm Code attribute to this method
 		cm.attributes().add(code);
 		// Done
-		System.out.println("final: "+bytecodes);
+		String final_s = bytecodes.toString();
+
+		System.out.println("final: \n"+final_s.replace(",","\n"));
 		return cm;
 	}
 
@@ -565,14 +567,10 @@ public class ClassFileWriter {
 		}
 		//leave on top of array
 		bytecodes.add(new Bytecode.Load(reg_index, JAVA_UTIL_ARRAYLIST));
-//		print_byte_info(bytecodes.get(bytecodes.size()-1),context,bytecodes);
 
-//		print_byte_info(JAVA_UTIL_ARRAYLIST,context,bytecodes);
 	}
 
-	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
-		Attribute.Type attr = e.attribute(Attribute.Type.class);
-		Type t = attr.type;
+	private void putInArray(Expr e,Type t,int array_reg_index,Context context,List<Bytecode> bytecodes){
 		//get array
 		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 		//put on stack
@@ -587,11 +585,16 @@ public class ClassFileWriter {
 		//pop
 		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
 	}
+	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
+		Attribute.Type attr = e.attribute(Attribute.Type.class);
+		Type t = attr.type;
+		putInArray(e,t,array_reg_index,context,bytecodes);
+
+	}
 
 	private void translateArrCompare(Expr lhs, Expr rhs, Expr.BOp operator, Context context, List<Bytecode> bytecodes) {
 
-		translate(lhs,context,bytecodes);
-		translate(rhs,context,bytecodes);
+
 
 		//check equality
 		JvmType.Function boxMethodType =
@@ -612,17 +615,22 @@ public class ClassFileWriter {
 	}
 	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
 		//come here
-		Attribute.Type attr = expr.getLhs().attribute(Attribute.Type.class);
-		JvmType type = toJvmType(attr.type);
+		Attribute.Type lhs_attr = expr.getLhs().attribute(Attribute.Type.class);
+		JvmType lhs_type = toJvmType(lhs_attr.type);
+		Attribute.Type rhs_attr = expr.getRhs().attribute(Attribute.Type.class);
+		JvmType rhs_type = toJvmType(rhs_attr.type);
 
 		Expr lhs = expr.getLhs();
 		Expr rhs = expr.getRhs();
-		if(lhs instanceof Expr.ArrayGenerator || lhs instanceof Expr.ArrayInitialiser || rhs instanceof Expr.ArrayGenerator || rhs instanceof Expr.ArrayInitialiser){
+
+		translate(lhs,context,bytecodes);
+		translate(rhs,context,bytecodes);
+
+
+		//if an array
+		if(lhs_type == JAVA_UTIL_ARRAYLIST || rhs_type == JAVA_UTIL_ARRAYLIST){
 			translateArrCompare(lhs,rhs,expr.getOp(),context,bytecodes);
 			return;
-		}else {
-			translate(lhs, context, bytecodes);
-			translate(rhs, context, bytecodes);
 		}
 
 		int binOp = convertComparisonOperator(expr.getOp());
@@ -634,7 +642,7 @@ public class ClassFileWriter {
 			case MUL:
 			case DIV:
 			case REM:
-				bytecodes.add(new Bytecode.BinOp(binOp, type));
+				bytecodes.add(new Bytecode.BinOp(binOp, lhs_type));
 				break;
 			case EQ:
 			case NEQ:
@@ -644,7 +652,7 @@ public class ClassFileWriter {
 			case GTEQ:
 				String trueLabel = freshLabel();
 				String exitLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(binOp, type, trueLabel));
+				bytecodes.add(new Bytecode.IfCmp(binOp, lhs_type, trueLabel));
 				bytecodes.add(new Bytecode.LoadConst(false));
 				bytecodes.add(new Bytecode.Goto(exitLabel));
 				bytecodes.add(new Bytecode.Label(trueLabel));
@@ -658,10 +666,31 @@ public class ClassFileWriter {
 
 	private void translate(Expr.Literal expr, Context context, List<Bytecode> bytecodes) {
 		Object value = expr.getValue();
+
 		// FIXME: it's possible that the value here is an instanceof List or
 		// Map. This indicates a record or array constant, which cannot be
 		// passed through to the LoadConst bytecode.
-		bytecodes.add(new Bytecode.LoadConst(value));
+		Attribute.Type attr = expr.attribute(Attribute.Type.class);
+		if(attr.type instanceof Type.Array){
+			String s = (String)expr.getValue();
+			ArrayList<Expr> arr_args = new ArrayList<>();
+			ArrayList<Attribute> char_attributes = new ArrayList<>();
+			char_attributes.add(new Attribute.Type(new Type.Int()));
+			for(char c:s.toCharArray()){
+				Expr expr_c = new Expr.Literal(Character.getNumericValue(c),char_attributes);
+				arr_args.add(expr_c);
+			}
+
+			Expr arr = new Expr.ArrayInitialiser(arr_args,new Attribute.Type(new Type.Array(new Type.Int())));
+			translate(arr,context,bytecodes);
+
+		}else if(attr.type instanceof Type.Named){
+			throw new RuntimeException("not implemented, type is named");
+		}else if(attr.type instanceof Type.Record){
+			throw new RuntimeException("not implemented, type is record");
+		}else{
+			bytecodes.add(new Bytecode.LoadConst(value));
+		}
 	}
 
 	private void translate(Expr.IndexOf expr, Context context, List<Bytecode> bytecodes) {
