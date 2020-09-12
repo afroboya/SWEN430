@@ -187,6 +187,11 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Label(label));
 	}
 
+	private void throwException(List<Bytecode> bytecodes){
+		constructObject(JvmTypes.JAVA_LANG_RUNTIMEEXCEPTION, bytecodes);
+		bytecodes.add(new Bytecode.Throw());
+	}
+
 	private void print_byte_info(JvmType t, Context context,List<Bytecode> bytecodes) {
 
 			//save existing value we are going to print
@@ -222,26 +227,30 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Stmt.Continue stmt, Context context, List<Bytecode> bytecodes) {
-		String label = context.viewMostRecentLoop().get(INCREMENTAL_TEXT);
+		String label = context.viewMostRecentLoop().get(END_ITERATION_TEXT);
 		bytecodes.add(new Bytecode.Goto(label));
+
 	}
 
 	private final String CONDITIONAL_TEXT = "conditional";
-	private final String INCREMENTAL_TEXT = "incremental";
+	private final String END_ITERATION_TEXT = "incremental";
 	private final String EXIT_TEXT = "exit";
+	private int c = 0;
+
 	private void translate(Stmt.For stmt, Context context, List<Bytecode> bytecodes) {
 		//set up for
 		translate(stmt.getDeclaration(),context,bytecodes);
 
-		String trueLabel, exitLabel,conditionLabel,incrementLabel;
+		String trueLabel, exitLabel,conditionLabel,endIterationLabel;
 		conditionLabel = freshLabel()+"_conditional";
-		incrementLabel = freshLabel()+"_increment";
+		endIterationLabel = freshLabel()+"_increment";
 		trueLabel = freshLabel()+"_true";
-		exitLabel = freshLabel()+"_exit_for_loop";
+		exitLabel = freshLabel()+"_exit_for_loop_"+c;
+		c++;
 
 		HashMap<String,String> loop_details = new HashMap<>();
 		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
-		loop_details.put(INCREMENTAL_TEXT,incrementLabel);
+		loop_details.put(END_ITERATION_TEXT,endIterationLabel);
 		loop_details.put(EXIT_TEXT,exitLabel);
 		context.addLoop(loop_details);
 
@@ -257,7 +266,7 @@ public class ClassFileWriter {
 			translate(s,context,bytecodes);
 		}
 		//increment
-		bytecodes.add(new Bytecode.Label(incrementLabel));
+		bytecodes.add(new Bytecode.Label(endIterationLabel));
 		translate(stmt.getIncrement(),context,bytecodes);
 		//check cond
 		bytecodes.add(new Bytecode.Goto(conditionLabel));
@@ -324,6 +333,7 @@ public class ClassFileWriter {
 
 		HashMap<String,String> loop_details = new HashMap<>();
 		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(END_ITERATION_TEXT,conditionLabel);
 		loop_details.put(EXIT_TEXT,exitLabel);
 		context.addLoop(loop_details);
 
@@ -601,6 +611,7 @@ public class ClassFileWriter {
 		//put on stack
 		translate(e,context,bytecodes);
 		//convert to object
+		//FIXME added this line to literal but not sure if correct
 		boxAsNecessary(t,bytecodes);
 		JvmType.Function boxMethodType =
 				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
@@ -705,7 +716,9 @@ public class ClassFileWriter {
 		// Map. This indicates a record or array constant, which cannot be
 		// passed through to the LoadConst bytecode.
 		Attribute.Type attr = expr.attribute(Attribute.Type.class);
-
+		if(attr == null){
+			System.out.println("WAS NULL FOR ATTR: "+expr);
+		}
 		if((attr != null) && (attr.type instanceof Type.Array)){
 			if(value instanceof String) {//i.e "HELLO"
 				String s = (String) value;
@@ -720,11 +733,11 @@ public class ClassFileWriter {
 				Expr arr = new Expr.ArrayInitialiser(arr_args, new Attribute.Type(new Type.Array(new Type.Int())));
 				translate(arr, context, bytecodes);
 			}else if(value instanceof List){//i.e [1]
-
+				Type element_type = ((Type.Array) attr.type).getElement();
 				int array_reg_index = createArray(context,bytecodes);
-
+				//convert to expr, put in array
 				for(Object o:(List)value){
-					putInArray(o,array_reg_index,bytecodes);
+					putInArray(o,element_type,array_reg_index,bytecodes);
 				}
 				bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 			}
@@ -734,16 +747,20 @@ public class ClassFileWriter {
 		}else if((attr != null) && attr.type instanceof Type.Record){
 			throw new RuntimeException("not implemented, type is record");
 		}else{
+
 			bytecodes.add(new Bytecode.LoadConst(value));
+
 		}
+
 	}
 
-	public void putInArray(Object o,int array_reg_index,List<Bytecode> bytecodes){
+	public void putInArray(Object o,Type t,int array_reg_index,List<Bytecode> bytecodes){
 
 		//get array
 		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 		//put on stack
 		bytecodes.add(new Bytecode.LoadConst(o));
+		boxAsNecessary(t,bytecodes);
 		//convert to object
 		JvmType.Function boxMethodType =
 				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
@@ -751,6 +768,8 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "add", boxMethodType,VIRTUAL));
 		//pop
 		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
+
+
 	}
 
 	private void translate(Expr.IndexOf expr, Context context, List<Bytecode> bytecodes) {
