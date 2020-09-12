@@ -102,7 +102,7 @@ public class ClassFileWriter {
 		// Construct method object
 		ClassFile.Method cm = new ClassFile.Method(method.name(), ft, modifiers);
 		// Generate bytecodes representing method body
-		Context context = new Context(owner,constructMethodEnvironment(method),constructTypeEnvironment(method));
+		Context context = new Context(owner,constructMethodEnvironment(method));
 		ArrayList<Bytecode> bytecodes = new ArrayList<Bytecode>();
 		translate(method.getBody(),context,bytecodes);
 		// Handle methods with missing return statements, as these need a
@@ -116,6 +116,7 @@ public class ClassFileWriter {
 		String final_s = bytecodes.toString();
 
 		System.out.println("final: \n"+final_s.replace(",","\n"));
+//		System.out.println("final: \n"+final_s);
 		return cm;
 	}
 
@@ -200,7 +201,8 @@ public class ClassFileWriter {
 
 			bytecodes.add(new Bytecode.GetField(SYSTEM, "out", PRINTSTREAM, Bytecode.FieldMode.STATIC));
 
-			bytecodes.add(new Bytecode.Load(reg,t));
+//			bytecodes.add(new Bytecode.Load(reg,t));
+			bytecodes.add(new Bytecode.LoadConst(99));
 			JvmType.Function boxMethodType = new JvmType.Function(new JvmType.Void(), new JvmType.Int());
 			bytecodes.add(new Bytecode.Invoke(PRINTSTREAM, "println", boxMethodType, VIRTUAL));
 
@@ -235,7 +237,7 @@ public class ClassFileWriter {
 		conditionLabel = freshLabel()+"_conditional";
 		incrementLabel = freshLabel()+"_increment";
 		trueLabel = freshLabel()+"_true";
-		exitLabel = freshLabel()+"_exit";
+		exitLabel = freshLabel()+"_exit_for_loop";
 
 		HashMap<String,String> loop_details = new HashMap<>();
 		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
@@ -359,6 +361,8 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Stmt.Switch stmt, Context context, List<Bytecode> bytecodes) {
+
+//		print_byte_info(new JvmType.Int(),context,bytecodes);
 		String exitLabel,conditionLabel;
 		conditionLabel = freshLabel()+"_conditional";
 		exitLabel = freshLabel()+"_exit";
@@ -368,9 +372,6 @@ public class ClassFileWriter {
 		loop_details.put(EXIT_TEXT,exitLabel);
 		context.addLoop(loop_details);
 
-		//assuming expressions is of type Variable or an array or record access. Regardless, it should reduce down to a
-		Object value = context.getRegister(stmt.getExpr().toString());
-
 		Attribute.Type attr = stmt.getExpr().attribute(Attribute.Type.class);
 		JvmType type = toJvmType(attr.type);
 
@@ -378,20 +379,34 @@ public class ClassFileWriter {
 		//Generate labels for each case
 		HashMap<Stmt.Case,String> case_to_label = new HashMap<>();
 		for(Stmt.Case switch_case:stmt.getCases()){
-			String label = freshLabel()+"_"+switch_case.toString();
+			String label;
+			if(switch_case.isDefault()) {
+				label = freshLabel() + "_default";
+			}else{
+				label = freshLabel() + "_" + switch_case.getValue().toString();
+			}
 			case_to_label.put(switch_case,label);
 		}
 
+
 		for(Stmt.Case switch_case:stmt.getCases()){
-			String label = case_to_label.get(switch_case);
+			String switch_body_label = case_to_label.get(switch_case);
 			//put value on stack
 			if(switch_case.isDefault()){
-				System.out.println(switch_case.toString());
-				bytecodes.add(new Bytecode.Goto(label));
+				System.out.println("default: "+switch_case.toString());
+				bytecodes.add(new Bytecode.Goto(switch_body_label));
 			}else {
-				translate(stmt.getExpr(), context, bytecodes);
-				translate(switch_case.getValue(), context, bytecodes);
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.EQ, type, label));
+
+				switch_case.getValue().attributes().add(new Attribute.Type(attr.type));
+
+				Expr.Binary b = new Expr.Binary(Expr.BOp.EQ,stmt.getExpr(),switch_case.getValue());
+
+				translate(b,context,bytecodes);
+
+				//if not equal to 0(False) i.e is True, then go to stmt branch
+				bytecodes.add(new Bytecode.If(IfMode.NE, switch_body_label));
+
+
 			}
 		}
 		//after checking all cases with no break or return, should go to exit
@@ -399,9 +414,11 @@ public class ClassFileWriter {
 
 		//label: body
 		for(Stmt.Case switch_case:stmt.getCases()){
+			//label for body
 			bytecodes.add(new Bytecode.Label(case_to_label.get(switch_case)));
 			translate(switch_case.getBody(),context,bytecodes);
 		}
+
 
 		//any break will go to here
 		bytecodes.add(new Bytecode.Label(context.viewMostRecentLoop().get(EXIT_TEXT)));
@@ -510,15 +527,10 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.ArrayGenerator expr, Context context, List<Bytecode> bytecodes) {
-		System.out.println("generator");//FIXME whole thing is untested
+		System.out.println("generator");
 
-		// construct array
-		constructObject(JAVA_UTIL_ARRAYLIST,bytecodes);
-		//store it
-		String name = freshLabel()+"_array";
-		int array_reg_index = context.declareRegister(name);
-		bytecodes.add(new Bytecode.Store(array_reg_index,JAVA_UTIL_ARRAYLIST));
 
+		int array_reg_index = createArray(context,bytecodes);
 
 		//declare my own variable for keeping count
 		//wont overlap with existing as fresh label and contains char that variables cannot have
@@ -557,11 +569,8 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.ArrayInitialiser expr, Context context, List<Bytecode> bytecodes) {
-		constructObject(JAVA_UTIL_ARRAYLIST,bytecodes);
 
-		String name = freshLabel()+"_array";
-		int reg_index = context.declareRegister(name);
-		bytecodes.add(new Bytecode.Store(reg_index,JAVA_UTIL_ARRAYLIST));
+		int reg_index = createArray(context,bytecodes);
 
 		for(Expr e:expr.getArguments()){
 			putInArray(e,reg_index,context,bytecodes);
@@ -571,7 +580,22 @@ public class ClassFileWriter {
 
 	}
 
-	private void putInArray(Expr e,Type t,int array_reg_index,Context context,List<Bytecode> bytecodes){
+	/**
+	 * Create an array, returns the register index
+	 * @return
+	 */
+	private int createArray(Context context,List<Bytecode> bytecodes){
+		constructObject(JAVA_UTIL_ARRAYLIST,bytecodes);
+
+		String name = freshLabel()+"_array";
+		int reg_index = context.declareRegister(name);
+		bytecodes.add(new Bytecode.Store(reg_index,JAVA_UTIL_ARRAYLIST));
+		return reg_index;
+	}
+
+	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
+		Attribute.Type attr = e.attribute(Attribute.Type.class);
+		Type t = attr.type;
 		//get array
 		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 		//put on stack
@@ -585,11 +609,6 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "add", boxMethodType,VIRTUAL));
 		//pop
 		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
-	}
-	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
-		Attribute.Type attr = e.attribute(Attribute.Type.class);
-		Type t = attr.type;
-		putInArray(e,t,array_reg_index,context,bytecodes);
 
 	}
 
@@ -615,6 +634,7 @@ public class ClassFileWriter {
 		}
 	}
 	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
+		String exitLabel = freshLabel()+"_exit_"+expr.getOp();
 		//come here
 		Attribute.Type lhs_attr = expr.getLhs().attribute(Attribute.Type.class);
 		JvmType lhs_type = toJvmType(lhs_attr.type);
@@ -624,6 +644,16 @@ public class ClassFileWriter {
 		Expr lhs = expr.getLhs();
 		Expr rhs = expr.getRhs();
 
+
+		String doRhs = freshLabel()+"do_rhs";
+		if(expr.getOp() == Expr.BOp.AND){
+			//if first cond fails, exit.
+			translate(lhs,context,bytecodes);
+			bytecodes.add(new Bytecode.If(IfMode.NE,doRhs));
+			bytecodes.add(new Bytecode.LoadConst(false));
+			bytecodes.add(new Bytecode.Goto(exitLabel));
+		}
+		bytecodes.add(new Bytecode.Label(doRhs));
 		translate(lhs,context,bytecodes);
 		translate(rhs,context,bytecodes);
 
@@ -633,6 +663,7 @@ public class ClassFileWriter {
 			translateArrCompare(lhs,rhs,expr.getOp(),context,bytecodes);
 			return;
 		}
+
 
 		int binOp = convertComparisonOperator(expr.getOp());
 		switch (expr.getOp()) {
@@ -651,18 +682,20 @@ public class ClassFileWriter {
 			case LTEQ:
 			case GT:
 			case GTEQ:
-				String trueLabel = freshLabel();
-				String exitLabel = freshLabel();
+				String trueLabel = freshLabel()+"_true_"+binOp;
+
 				bytecodes.add(new Bytecode.IfCmp(binOp, lhs_type, trueLabel));
 				bytecodes.add(new Bytecode.LoadConst(false));
 				bytecodes.add(new Bytecode.Goto(exitLabel));
 				bytecodes.add(new Bytecode.Label(trueLabel));
 				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(exitLabel));
+
 				break;
 			default:
 				throw new IllegalArgumentException("unknown binary operator encountered");
 		}
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
 	}
 
 	private void translate(Expr.Literal expr, Context context, List<Bytecode> bytecodes) {
@@ -672,26 +705,52 @@ public class ClassFileWriter {
 		// Map. This indicates a record or array constant, which cannot be
 		// passed through to the LoadConst bytecode.
 		Attribute.Type attr = expr.attribute(Attribute.Type.class);
-		if(attr.type instanceof Type.Array){
-			String s = (String)expr.getValue();
-			ArrayList<Expr> arr_args = new ArrayList<>();
-			ArrayList<Attribute> char_attributes = new ArrayList<>();
-			char_attributes.add(new Attribute.Type(new Type.Int()));
-			for(char c:s.toCharArray()){
-				Expr expr_c = new Expr.Literal(Character.getNumericValue(c),char_attributes);
-				arr_args.add(expr_c);
+
+		if((attr != null) && (attr.type instanceof Type.Array)){
+			if(value instanceof String) {//i.e "HELLO"
+				String s = (String) value;
+				ArrayList<Expr> arr_args = new ArrayList<>();
+				ArrayList<Attribute> char_attributes = new ArrayList<>();
+				char_attributes.add(new Attribute.Type(new Type.Int()));
+				for (char c : s.toCharArray()) {
+					Expr expr_c = new Expr.Literal(c, char_attributes);
+					arr_args.add(expr_c);
+				}
+
+				Expr arr = new Expr.ArrayInitialiser(arr_args, new Attribute.Type(new Type.Array(new Type.Int())));
+				translate(arr, context, bytecodes);
+			}else if(value instanceof List){//i.e [1]
+
+				int array_reg_index = createArray(context,bytecodes);
+
+				for(Object o:(List)value){
+					putInArray(o,array_reg_index,bytecodes);
+				}
+				bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 			}
 
-			Expr arr = new Expr.ArrayInitialiser(arr_args,new Attribute.Type(new Type.Array(new Type.Int())));
-			translate(arr,context,bytecodes);
-
-		}else if(attr.type instanceof Type.Named){
+		}else if((attr != null) && attr.type instanceof Type.Named){
 			throw new RuntimeException("not implemented, type is named");
-		}else if(attr.type instanceof Type.Record){
+		}else if((attr != null) && attr.type instanceof Type.Record){
 			throw new RuntimeException("not implemented, type is record");
 		}else{
 			bytecodes.add(new Bytecode.LoadConst(value));
 		}
+	}
+
+	public void putInArray(Object o,int array_reg_index,List<Bytecode> bytecodes){
+
+		//get array
+		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
+		//put on stack
+		bytecodes.add(new Bytecode.LoadConst(o));
+		//convert to object
+		JvmType.Function boxMethodType =
+				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "add", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
 	}
 
 	private void translate(Expr.IndexOf expr, Context context, List<Bytecode> bytecodes) {
@@ -984,23 +1043,6 @@ public class ClassFileWriter {
 		return environment;
 	}
 
-	/**
-	 * Construct an initial context for the given method. In essence, this
-	 * just maps every parameter to the corresponding JVM register, as these are
-	 * automatically assigned by the JVM when the method is in invoked.
-	 *
-	 * @param method
-	 * @return
-	 */
-	private Map<String,Type> constructTypeEnvironment(WhileFile.MethodDecl method) {
-		HashMap<String,Type> environment = new HashMap<>();
-		int index = 0;
-		for(WhileFile.Parameter p : method.getParameters()) {
-			environment.put(p.getName(),p.getType());
-		}
-		return environment;
-	}
-
 
 	/**
 	 * Check whether a While type is a primitive or not
@@ -1105,20 +1147,20 @@ public class ClassFileWriter {
 		 */
 		private final Map<String,Integer> environment;
 
-		private final Deque<Map<String,String>> loopManagement;
+		private final Stack<Map<String,String>> loopManagement;
 
 
 
-		public Context(JvmType.Clazz enclosingClass, Map<String,Integer> environment,Map<String,Type> arr_to_type) {
+		public Context(JvmType.Clazz enclosingClass, Map<String,Integer> environment) {
 			this.enclosingClass = enclosingClass;
 			this.environment = environment;
-			this.loopManagement = new ArrayDeque<>();
+			this.loopManagement = new Stack<>();
 		}
 
 		public Context(Context context) {
 			this.enclosingClass = context.enclosingClass;
 			this.environment = new HashMap<String,Integer>(context.environment);
-			this.loopManagement = new ArrayDeque<>(context.loopManagement);
+			this.loopManagement = new Stack<>();
 		}
 
 		/**
@@ -1164,7 +1206,7 @@ public class ClassFileWriter {
 		}
 
 		public void removeLoop(){
-			loopManagement.poll();
+			loopManagement.pop();
 		}
 
 	}
