@@ -116,7 +116,7 @@ public class ClassFileWriter {
 		// Done
 		String final_s = bytecodes.toString();
 
-		System.out.println("final: \n"+final_s.replace(",","\n"));
+//		System.out.println("final: \n"+final_s.replace(",","\n"));
 //		System.out.println("final: \n"+final_s);
 		return cm;
 	}
@@ -404,7 +404,7 @@ public class ClassFileWriter {
 			String switch_body_label = case_to_label.get(switch_case);
 			//put value on stack
 			if(switch_case.isDefault()){
-				System.out.println("default: "+switch_case.toString());
+//				System.out.println("default: "+switch_case.toString());
 				bytecodes.add(new Bytecode.Goto(switch_body_label));
 			}else {
 
@@ -498,6 +498,18 @@ public class ClassFileWriter {
 
 			//pop element returned by set, we do not need it.
 			bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
+		}else if(lhs instanceof Expr.RecordAccess){
+			Expr.RecordAccess access = (Expr.RecordAccess)lhs;
+
+			//put map on stack
+			translate(access.getSource(),context,bytecodes);
+
+			putInHashMap(access.getName(),rhs,context,bytecodes);
+			//load the rhs
+			translate(rhs, context, bytecodes);
+			cloneAsNecessary(rhsType,bytecodes);
+
+
 		} else {
 			throw new IllegalArgumentException("unknown lval encountered: "+lhs.toString());
 		}
@@ -538,9 +550,6 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.ArrayGenerator expr, Context context, List<Bytecode> bytecodes) {
-		System.out.println("generator");
-
-
 		int array_reg_index = createArray(context,bytecodes);
 
 		//declare my own variable for keeping count
@@ -739,14 +748,10 @@ public class ClassFileWriter {
 	private void translate(Expr.Literal expr, Context context, List<Bytecode> bytecodes) {
 		Object value = expr.getValue();
 
-		// FIXME: it's possible that the value here is an instanceof List or
-		// Map. This indicates a record or array constant, which cannot be
-		// passed through to the LoadConst bytecode.
 		Attribute.Type attr = expr.attribute(Attribute.Type.class);
 		Type t = attr.type;
 		while(t instanceof Type.Named){
 			t = this.declaredTypes.get(((Type.Named) t).getName());
-//			throw new RuntimeException("not implemented, type is named");
 		}
 
 		if(t instanceof Type.Array){
@@ -763,17 +768,33 @@ public class ClassFileWriter {
 				Expr arr = new Expr.ArrayInitialiser(arr_args, new Attribute.Type(new Type.Array(new Type.Int())));
 				translate(arr, context, bytecodes);
 			}else if(value instanceof List){//i.e [1]
-				Type element_type = ((Type.Array) attr.type).getElement();
+				Type element_type = ((Type.Array) t).getElement();
 				int array_reg_index = createArray(context,bytecodes);
 				//convert to expr, put in array
 				for(Object o:(List)value){
-					putInArray(o,element_type,array_reg_index,bytecodes);
+					putObjectInArray(o,element_type,array_reg_index,bytecodes);
 				}
 				bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 			}
 
 		}else if(t instanceof Type.Record){
-			throw new RuntimeException("not implemented, type is record");
+			if(value instanceof Map) {
+				//map name to type
+				HashMap<String,Type> name_to_type = new HashMap<>();
+				for(Pair<Type,String> p : ((Type.Record) t).getFields()){
+					name_to_type.put(p.second(),p.first());
+				}
+
+				int map_reg_index = createHashMap(context, bytecodes);
+				for (Map.Entry<String, Object> entry : ((Map<String, Object>) value).entrySet()) {
+					String name = entry.getKey();
+					putObjectInHashMap(name,entry.getValue(),name_to_type.get(name),map_reg_index,bytecodes);
+				}
+				bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
+
+			}else{
+				throw new RuntimeException("unknown value of record type");
+			}
 		}else{
 
 			bytecodes.add(new Bytecode.LoadConst(value));
@@ -782,7 +803,7 @@ public class ClassFileWriter {
 
 	}
 
-	public void putInArray(Object o,Type t,int array_reg_index,List<Bytecode> bytecodes){
+	public void putObjectInArray(Object o,Type t,int array_reg_index,List<Bytecode> bytecodes){
 
 		//get array
 		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
@@ -836,21 +857,34 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.RecordAccess expr, Context context, List<Bytecode> bytecodes) {
-		int i=0;
+		//get hashmap
+		translate(expr.getSource(),context,bytecodes);
+		//put string
+		bytecodes.add(new Bytecode.LoadConst(expr.getName()));
+		//get method
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT);
+
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "get", boxMethodType,VIRTUAL));
+
+		//cast to expected type
+		Attribute.Type attr = expr.attribute(Attribute.Type.class);
+		Type t = attr.type;
+		addReadConversion(t,bytecodes);
+
 	}
 
-	private void putInHashMap(Pair<String, Expr> field,int map_reg_index,Context context,List<Bytecode> bytecodes){
-		//get map
-		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_ARRAYLIST));
-
+	private void putInHashMap(String name, Expr value,Context context,List<Bytecode> bytecodes){
 		//put String on stack
-		bytecodes.add(new Bytecode.LoadConst(field.first()));
+		bytecodes.add(new Bytecode.LoadConst(name));
 		//put val on stack
-		translate(field.second(),context,bytecodes);
-		Attribute.Type attr = field.second().attribute(Attribute.Type.class);
+		translate(value,context,bytecodes);
+		Attribute.Type attr = value.attribute(Attribute.Type.class);
 		Type t = attr.type;
 		//convert  to object
 		boxAsNecessary(t,bytecodes);
+		cloneAsNecessary(toJvmType(t),bytecodes);
 
 		JvmType.Function boxMethodType =
 				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT,JvmTypes.JAVA_LANG_OBJECT);
@@ -859,21 +893,41 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "put", boxMethodType,VIRTUAL));
 		//pop
 		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_OBJECT));
+	}
 
+	private void putObjectInHashMap(String name, Object value,Type t,int map_reg_index,List<Bytecode> bytecodes){
+		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
+		//put String on stack
+		bytecodes.add(new Bytecode.LoadConst(name));
+		//put val on stack
+		bytecodes.add(new Bytecode.LoadConst(value));
+		boxAsNecessary(t,bytecodes);
+
+
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT,JvmTypes.JAVA_LANG_OBJECT);
+
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "put", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_OBJECT));
 	}
 
 	private void translate(Expr.RecordConstructor expr, Context context, List<Bytecode> bytecodes) {
 		int map_reg_index = createHashMap(context,bytecodes);
 		for (Pair<String, Expr> field : expr.getFields()) {
-			putInHashMap(field,map_reg_index,context,bytecodes);
+			//get map
+			bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
+			putInHashMap(field.first(),field.second(),context,bytecodes);
 		}
 		//leave on top of array
 		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
 
 	}
 
+
+
 	private void translate(Expr.Unary expr, Context context, List<Bytecode> bytecodes) {
-		System.out.println("calling translate expr");
 		translate(expr.getExpr(),context,bytecodes);
 		switch(expr.getOp()) {
 		case NOT: {
@@ -889,10 +943,6 @@ public class ClassFileWriter {
 
 			//returns 0(False) or 1(True)
 			bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "size", boxMethodType,VIRTUAL));
-
-
-			//array already on stack, translate call above
-			System.out.println("length: "+bytecodes.toString());
 
 			break;
 		default:
