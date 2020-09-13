@@ -12,6 +12,7 @@ import jasm.lang.JvmTypes;
 import jasm.lang.Modifier;
 
 import whilelang.ast.*;
+import whilelang.util.Pair;
 
 import static jasm.lang.Bytecode.InvokeMode.STATIC;
 import static jasm.lang.Bytecode.InvokeMode.VIRTUAL;
@@ -603,6 +604,19 @@ public class ClassFileWriter {
 		return reg_index;
 	}
 
+	/**
+	 * Create an array, returns the register index
+	 * @return
+	 */
+	private int createHashMap(Context context,List<Bytecode> bytecodes){
+		constructObject(JAVA_UTIL_HASHMAP,bytecodes);
+
+		String name = freshLabel()+"_hashmap";
+		int reg_index = context.declareRegister(name);
+		bytecodes.add(new Bytecode.Store(reg_index,JAVA_UTIL_HASHMAP));
+		return reg_index;
+	}
+
 	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
 		Attribute.Type attr = e.attribute(Attribute.Type.class);
 		Type t = attr.type;
@@ -623,16 +637,13 @@ public class ClassFileWriter {
 
 	}
 
-	private void translateArrCompare(Expr lhs, Expr rhs, Expr.BOp operator, Context context, List<Bytecode> bytecodes) {
-
-
-
+	private void translateCollectionCompare(JvmType.Reference type, Expr.BOp operator, Context context, List<Bytecode> bytecodes) {
 		//check equality
 		JvmType.Function boxMethodType =
 				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
 
 		//returns 0(False) or 1(True)
-		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "equals", boxMethodType,VIRTUAL));
+		bytecodes.add(new Bytecode.Invoke(type, "equals", boxMethodType,VIRTUAL));
 
 		switch (operator){
 			case EQ:
@@ -644,6 +655,8 @@ public class ClassFileWriter {
 				throw new IllegalArgumentException("unknown binary operator encountered");
 		}
 	}
+
+
 	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
 		String exitLabel = freshLabel()+"_exit_"+expr.getOp();
 		//come here
@@ -669,9 +682,23 @@ public class ClassFileWriter {
 		translate(rhs,context,bytecodes);
 
 
-		//if an array
-		if(lhs_type == JAVA_UTIL_ARRAYLIST || rhs_type == JAVA_UTIL_ARRAYLIST){
-			translateArrCompare(lhs,rhs,expr.getOp(),context,bytecodes);
+		//if an array or record
+		if(lhs_type == JAVA_UTIL_ARRAYLIST || rhs_type == JAVA_UTIL_ARRAYLIST || lhs_type == JAVA_UTIL_HASHMAP || rhs_type == JAVA_UTIL_HASHMAP){
+			//only attempt comparison if of same type
+			if(lhs_type != rhs_type){
+				switch (expr.getOp()){
+					case EQ:
+						bytecodes.add(new Bytecode.LoadConst(false));
+						return;
+					case NEQ:
+						bytecodes.add(new Bytecode.LoadConst(true));
+						return;
+					default:
+						throw new IllegalArgumentException("unknown binary operator encountered");
+				}
+			}else {
+				translateCollectionCompare((JvmType.Reference) lhs_type, expr.getOp(), context, bytecodes);
+			}
 			return;
 		}
 
@@ -716,10 +743,13 @@ public class ClassFileWriter {
 		// Map. This indicates a record or array constant, which cannot be
 		// passed through to the LoadConst bytecode.
 		Attribute.Type attr = expr.attribute(Attribute.Type.class);
-		if(attr == null){
-			System.out.println("WAS NULL FOR ATTR: "+expr);
+		Type t = attr.type;
+		while(t instanceof Type.Named){
+			t = this.declaredTypes.get(((Type.Named) t).getName());
+//			throw new RuntimeException("not implemented, type is named");
 		}
-		if((attr != null) && (attr.type instanceof Type.Array)){
+
+		if(t instanceof Type.Array){
 			if(value instanceof String) {//i.e "HELLO"
 				String s = (String) value;
 				ArrayList<Expr> arr_args = new ArrayList<>();
@@ -742,9 +772,7 @@ public class ClassFileWriter {
 				bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 			}
 
-		}else if((attr != null) && attr.type instanceof Type.Named){
-			throw new RuntimeException("not implemented, type is named");
-		}else if((attr != null) && attr.type instanceof Type.Record){
+		}else if(t instanceof Type.Record){
 			throw new RuntimeException("not implemented, type is record");
 		}else{
 
@@ -808,10 +836,39 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.RecordAccess expr, Context context, List<Bytecode> bytecodes) {
+		int i=0;
+	}
+
+	private void putInHashMap(Pair<String, Expr> field,int map_reg_index,Context context,List<Bytecode> bytecodes){
+		//get map
+		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_ARRAYLIST));
+
+		//put String on stack
+		bytecodes.add(new Bytecode.LoadConst(field.first()));
+		//put val on stack
+		translate(field.second(),context,bytecodes);
+		Attribute.Type attr = field.second().attribute(Attribute.Type.class);
+		Type t = attr.type;
+		//convert  to object
+		boxAsNecessary(t,bytecodes);
+
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT,JvmTypes.JAVA_LANG_OBJECT);
+
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "put", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_OBJECT));
 
 	}
 
 	private void translate(Expr.RecordConstructor expr, Context context, List<Bytecode> bytecodes) {
+		int map_reg_index = createHashMap(context,bytecodes);
+		for (Pair<String, Expr> field : expr.getFields()) {
+			putInHashMap(field,map_reg_index,context,bytecodes);
+		}
+		//leave on top of array
+		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
 
 	}
 
