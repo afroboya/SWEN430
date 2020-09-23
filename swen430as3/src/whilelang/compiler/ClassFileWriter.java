@@ -1,12 +1,7 @@
 package whilelang.compiler;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import jasm.attributes.SourceFile;
 import jasm.lang.Bytecode;
@@ -17,6 +12,10 @@ import jasm.lang.JvmTypes;
 import jasm.lang.Modifier;
 
 import whilelang.ast.*;
+import whilelang.util.Pair;
+
+import static jasm.lang.Bytecode.InvokeMode.STATIC;
+import static jasm.lang.Bytecode.InvokeMode.VIRTUAL;
 
 /**
  * Responsible for translating a While source file into a JVM Class file.
@@ -115,6 +114,10 @@ public class ClassFileWriter {
 		// Finally, add the jvm Code attribute to this method
 		cm.attributes().add(code);
 		// Done
+		String final_s = bytecodes.toString();
+
+//		System.out.println("final: \n"+final_s.replace(",","\n"));
+//		System.out.println("final: \n"+final_s);
 		return cm;
 	}
 
@@ -185,21 +188,125 @@ public class ClassFileWriter {
 		bytecodes.add(new Bytecode.Label(label));
 	}
 
+	private void throwException(List<Bytecode> bytecodes){
+		constructObject(JvmTypes.JAVA_LANG_RUNTIMEEXCEPTION, bytecodes);
+		bytecodes.add(new Bytecode.Throw());
+	}
+
+	private void print_byte_info(JvmType t, Context context,List<Bytecode> bytecodes) {
+
+			//save existing value we are going to print
+
+			String s = freshLabel();
+			int reg = context.declareRegister(s);
+			bytecodes.add(new Bytecode.Store(reg,t));
+
+			JvmType.Clazz SYSTEM = new JvmType.Clazz("java.lang.System");
+
+			JvmType.Clazz PRINTSTREAM = new JvmType.Clazz("java.io", "PrintStream");
+
+			bytecodes.add(new Bytecode.GetField(SYSTEM, "out", PRINTSTREAM, Bytecode.FieldMode.STATIC));
+
+//			bytecodes.add(new Bytecode.Load(reg,t));
+			bytecodes.add(new Bytecode.LoadConst(99));
+			JvmType.Function boxMethodType = new JvmType.Function(new JvmType.Void(), new JvmType.Int());
+			bytecodes.add(new Bytecode.Invoke(PRINTSTREAM, "println", boxMethodType, VIRTUAL));
+
+			//replace what we took to top of stack
+			bytecodes.add(new Bytecode.Load(reg,t));
+
+	}
+
 	private void translate(Stmt.Assign stmt, Context context, List<Bytecode> bytecodes) {
 		// translate assignment
 		translateAssignmentHelper(stmt.getLhs(),stmt.getRhs(),context,bytecodes);
 	}
 
 	private void translate(Stmt.Break stmt, Context context, List<Bytecode> bytecodes) {
-
+		String label = context.viewMostRecentLoop().get(EXIT_TEXT);
+		bytecodes.add(new Bytecode.Goto(label));
 	}
 
 	private void translate(Stmt.Continue stmt, Context context, List<Bytecode> bytecodes) {
+		String label = context.viewMostRecentLoop().get(END_ITERATION_TEXT);
+		bytecodes.add(new Bytecode.Goto(label));
 
 	}
 
-	private void translate(Stmt.For stmt, Context context, List<Bytecode> bytecodes) {
+	private final String CONDITIONAL_TEXT = "conditional";
+	private final String END_ITERATION_TEXT = "incremental";
+	private final String EXIT_TEXT = "exit";
+	private int c = 0;
 
+	private void translate(Stmt.For stmt, Context context, List<Bytecode> bytecodes) {
+		//set up for
+		translate(stmt.getDeclaration(),context,bytecodes);
+
+		String trueLabel, exitLabel,conditionLabel,endIterationLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		endIterationLabel = freshLabel()+"_increment";
+		trueLabel = freshLabel()+"_true";
+		exitLabel = freshLabel()+"_exit_for_loop_"+c;
+		c++;
+
+		HashMap<String,String> loop_details = new HashMap<>();
+		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(END_ITERATION_TEXT,endIterationLabel);
+		loop_details.put(EXIT_TEXT,exitLabel);
+		context.addLoop(loop_details);
+
+		//check condition
+		bytecodes.add(new Bytecode.Label(conditionLabel));
+		translate(stmt.getCondition(),context,bytecodes);
+		bytecodes.add(new Bytecode.If(IfMode.NE, trueLabel));
+		bytecodes.add(new Bytecode.Goto(exitLabel));
+		//cond is true, run body and increment
+		bytecodes.add(new Bytecode.Label(trueLabel));
+
+		for(Stmt s:stmt.getBody()){
+			translate(s,context,bytecodes);
+		}
+		//increment
+		bytecodes.add(new Bytecode.Label(endIterationLabel));
+		translate(stmt.getIncrement(),context,bytecodes);
+		//check cond
+		bytecodes.add(new Bytecode.Goto(conditionLabel));
+
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
+		context.removeLoop();
+	}
+
+	private Integer convertComparisonOperator(Expr.BOp operator){
+		switch (operator){
+			case AND:
+				return Bytecode.BinOp.AND;
+			case OR:
+				return Bytecode.BinOp.OR;
+			case ADD:
+				return Bytecode.BinOp.ADD;
+			case SUB:
+				return Bytecode.BinOp.SUB;
+			case MUL:
+				return Bytecode.BinOp.MUL;
+			case DIV:
+				return Bytecode.BinOp.DIV;
+			case REM:
+				return Bytecode.BinOp.REM;
+			case EQ:
+				return Bytecode.IfCmp.EQ;
+			case NEQ:
+				return Bytecode.IfCmp.NE;
+			case LT:
+				return Bytecode.IfCmp.LT;
+			case LTEQ:
+				return Bytecode.IfCmp.LE;
+			case GT:
+				return Bytecode.IfCmp.GT;
+			case GTEQ:
+				return Bytecode.IfCmp.GE;
+		}
+		throw new RuntimeException("Error: got unexpected operator "+operator);
 	}
 
 	private void translate(Stmt.IfElse stmt, Context context, List<Bytecode> bytecodes) {
@@ -220,6 +327,33 @@ public class ClassFileWriter {
 
 	private void translate(Stmt.While stmt, Context context, List<Bytecode> bytecodes) {
 
+		String trueLabel, exitLabel,conditionLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		trueLabel = freshLabel()+"_true";
+		exitLabel = freshLabel()+"_exit";
+
+		HashMap<String,String> loop_details = new HashMap<>();
+		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(END_ITERATION_TEXT,conditionLabel);
+		loop_details.put(EXIT_TEXT,exitLabel);
+		context.addLoop(loop_details);
+
+		//check condition
+		bytecodes.add(new Bytecode.Label(conditionLabel));
+		translate(stmt.getCondition(),context,bytecodes);
+		bytecodes.add(new Bytecode.If(IfMode.NE, trueLabel));
+		bytecodes.add(new Bytecode.Goto(exitLabel));
+		//cond is true, run body and increment
+		bytecodes.add(new Bytecode.Label(trueLabel));
+		for(Stmt s:stmt.getBody()){
+			translate(s ,context,bytecodes);
+		}
+		//check cond
+		bytecodes.add(new Bytecode.Goto(conditionLabel));
+
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
+		context.removeLoop();
 	}
 
 	private void translate(Stmt.Return stmt, Context context, List<Bytecode> bytecodes) {
@@ -231,12 +365,76 @@ public class ClassFileWriter {
 			translate(expr,context,bytecodes);
 			// Add return bytecode
 			bytecodes.add(new Bytecode.Return(toJvmType(attr.type)));
+
 		} else {
 			bytecodes.add(new Bytecode.Return(null));
 		}
 	}
 
 	private void translate(Stmt.Switch stmt, Context context, List<Bytecode> bytecodes) {
+
+//		print_byte_info(new JvmType.Int(),context,bytecodes);
+		String exitLabel,conditionLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		exitLabel = freshLabel()+"_exit";
+
+		HashMap<String,String> loop_details = new HashMap<>();
+		loop_details.put(CONDITIONAL_TEXT,conditionLabel);
+		loop_details.put(EXIT_TEXT,exitLabel);
+		context.addLoop(loop_details);
+
+		Attribute.Type attr = stmt.getExpr().attribute(Attribute.Type.class);
+		JvmType type = toJvmType(attr.type);
+
+
+		//Generate labels for each case
+		HashMap<Stmt.Case,String> case_to_label = new HashMap<>();
+		for(Stmt.Case switch_case:stmt.getCases()){
+			String label;
+			if(switch_case.isDefault()) {
+				label = freshLabel() + "_default";
+			}else{
+				label = freshLabel() + "_" + switch_case.getValue().toString();
+			}
+			case_to_label.put(switch_case,label);
+		}
+
+
+		for(Stmt.Case switch_case:stmt.getCases()){
+			String switch_body_label = case_to_label.get(switch_case);
+			//put value on stack
+			if(switch_case.isDefault()){
+//				System.out.println("default: "+switch_case.toString());
+				bytecodes.add(new Bytecode.Goto(switch_body_label));
+			}else {
+
+				switch_case.getValue().attributes().add(new Attribute.Type(attr.type));
+
+				Expr.Binary b = new Expr.Binary(Expr.BOp.EQ,stmt.getExpr(),switch_case.getValue());
+
+				translate(b,context,bytecodes);
+
+				//if not equal to 0(False) i.e is True, then go to stmt branch
+				bytecodes.add(new Bytecode.If(IfMode.NE, switch_body_label));
+
+
+			}
+		}
+		//after checking all cases with no break or return, should go to exit
+		bytecodes.add(new Bytecode.Goto(context.viewMostRecentLoop().get(EXIT_TEXT)));
+
+		//label: body
+		for(Stmt.Case switch_case:stmt.getCases()){
+			//label for body
+			bytecodes.add(new Bytecode.Label(case_to_label.get(switch_case)));
+			translate(switch_case.getBody(),context,bytecodes);
+		}
+
+
+		//any break will go to here
+		bytecodes.add(new Bytecode.Label(context.viewMostRecentLoop().get(EXIT_TEXT)));
+
+		context.removeLoop();
 
 	}
 
@@ -275,11 +473,45 @@ public class ClassFileWriter {
 		//
 		if (lhs instanceof Expr.Variable) {
 			Expr.Variable var = (Expr.Variable) lhs;
+			//load the rhs
 			translate(rhs, context, bytecodes);
+			cloneAsNecessary(rhsType,bytecodes);
 			int register = context.getRegister(var.getName());
 			bytecodes.add(new Bytecode.Store(register, rhsType));
+		}else if(lhs instanceof Expr.IndexOf){
+			Expr.IndexOf expr = (Expr.IndexOf)lhs;
+			//put array on stack
+			translate(expr.getSource(),context,bytecodes);
+
+			//index
+			translate(expr.getIndex(),context,bytecodes);
+			//value
+			translate(rhs,context,bytecodes);
+			//convert to object
+			boxAsNecessary(attr.type,bytecodes);
+
+			JvmType.Function boxMethodType =
+					new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT,JvmTypes.INT,JvmTypes.JAVA_LANG_OBJECT);
+
+			//returns element
+			bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "set", boxMethodType,VIRTUAL));
+
+			//pop element returned by set, we do not need it.
+			bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
+		}else if(lhs instanceof Expr.RecordAccess){
+			Expr.RecordAccess access = (Expr.RecordAccess)lhs;
+
+			//put map on stack
+			translate(access.getSource(),context,bytecodes);
+
+			putInHashMap(access.getName(),rhs,context,bytecodes);
+			//load the rhs
+			translate(rhs, context, bytecodes);
+			cloneAsNecessary(rhsType,bytecodes);
+
+
 		} else {
-			throw new IllegalArgumentException("unknown lval encountered");
+			throw new IllegalArgumentException("unknown lval encountered: "+lhs.toString());
 		}
 	}
 
@@ -318,122 +550,296 @@ public class ClassFileWriter {
 	}
 
 	private void translate(Expr.ArrayGenerator expr, Context context, List<Bytecode> bytecodes) {
-		//FIXME to do
+		int array_reg_index = createArray(context,bytecodes);
 
+		//declare my own variable for keeping count
+		//wont overlap with existing as fresh label and contains char that variables cannot have
+		String increment_name = freshLabel()+"!";
+		context.declareRegister(increment_name);
+		int increment_register = context.getRegister(increment_name);
+		//store 0 in increment
+		bytecodes.add(new Bytecode.LoadConst(0));
+		bytecodes.add(new Bytecode.Store(increment_register, new JvmType.Int()));
+
+
+		String trueLabel, exitLabel,conditionLabel;
+		conditionLabel = freshLabel()+"_conditional";
+		trueLabel = freshLabel()+"_true";
+		exitLabel = freshLabel()+"_exit";
+
+		//condition start
+		bytecodes.add(new Bytecode.Label(conditionLabel));
+		translate(expr.getSize(),context,bytecodes);
+		bytecodes.add(new Bytecode.Load(increment_register,new JvmType.Int()));
+		//check condition
+		bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.GT, new JvmType.Int(), trueLabel));
+		bytecodes.add(new Bytecode.Goto(exitLabel));
+		bytecodes.add(new Bytecode.Label(trueLabel));
+		//add item here
+		putInArray(expr.getValue(),array_reg_index,context,bytecodes);
+
+		//increment
+		bytecodes.add(new Bytecode.Iinc(increment_register,1));
+		//final stuff
+		bytecodes.add(new Bytecode.Goto(conditionLabel));
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
+		//leave on top of array
+		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
 	}
 
 	private void translate(Expr.ArrayInitialiser expr, Context context, List<Bytecode> bytecodes) {
-	//FIXME to do
+
+		int reg_index = createArray(context,bytecodes);
+
+		for(Expr e:expr.getArguments()){
+			putInArray(e,reg_index,context,bytecodes);
+		}
+		//leave on top of array
+		bytecodes.add(new Bytecode.Load(reg_index, JAVA_UTIL_ARRAYLIST));
 
 	}
 
-	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {Attribute.Type attr = expr.getLhs().attribute(Attribute.Type.class);
-		JvmType type = toJvmType(attr.type);
+	/**
+	 * Create an array, returns the register index
+	 * @return
+	 */
+	private int createArray(Context context,List<Bytecode> bytecodes){
+		constructObject(JAVA_UTIL_ARRAYLIST,bytecodes);
 
-		Expr lhs = expr.getLhs();
-		Expr rhs = expr.getRhs();
+		String name = freshLabel()+"_array";
+		int reg_index = context.declareRegister(name);
+		bytecodes.add(new Bytecode.Store(reg_index,JAVA_UTIL_ARRAYLIST));
+		return reg_index;
+	}
 
-		translate(lhs,context,bytecodes);
-		translate(rhs,context,bytecodes);
+	/**
+	 * Create an array, returns the register index
+	 * @return
+	 */
+	private int createHashMap(Context context,List<Bytecode> bytecodes){
+		constructObject(JAVA_UTIL_HASHMAP,bytecodes);
 
-		String trueLabel, falseLabel;
+		String name = freshLabel()+"_hashmap";
+		int reg_index = context.declareRegister(name);
+		bytecodes.add(new Bytecode.Store(reg_index,JAVA_UTIL_HASHMAP));
+		return reg_index;
+	}
 
-		switch (expr.getOp()) {
-			case AND:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.AND, type));
-				break;
-			case OR:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.OR, type));
-				break;
-			case ADD:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.ADD, type));
-				break;
-			case SUB:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.SUB, type));
-				break;
-			case MUL:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.MUL, type));
-				break;
-			case DIV:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.DIV, type));
-				break;
-			case REM:
-				bytecodes.add(new Bytecode.BinOp(Bytecode.BinOp.REM, type));
-				break;
+	private void putInArray(Expr e,int array_reg_index,Context context,List<Bytecode> bytecodes){
+		Attribute.Type attr = e.attribute(Attribute.Type.class);
+		Type t = attr.type;
+		//get array
+		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
+		//put on stack
+		translate(e,context,bytecodes);
+		//convert to object
+		//FIXME added this line to literal but not sure if correct
+		boxAsNecessary(t,bytecodes);
+		JvmType.Function boxMethodType =
+				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
+
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "add", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
+
+	}
+
+	private void translateCollectionCompare(JvmType.Reference type, Expr.BOp operator, Context context, List<Bytecode> bytecodes) {
+		//check equality
+		JvmType.Function boxMethodType =
+				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
+
+		//returns 0(False) or 1(True)
+		bytecodes.add(new Bytecode.Invoke(type, "equals", boxMethodType,VIRTUAL));
+
+		switch (operator){
 			case EQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.EQ, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
+				return;
 			case NEQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.NE, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
-			case LT:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.LT, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
-			case LTEQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.LE, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
-			case GT:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.GT, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
-			case GTEQ:
-				trueLabel = freshLabel();
-				falseLabel = freshLabel();
-				bytecodes.add(new Bytecode.IfCmp(Bytecode.IfCmp.GE, type, trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(false));
-				bytecodes.add(new Bytecode.Goto(falseLabel));
-				bytecodes.add(new Bytecode.Label(trueLabel));
-				bytecodes.add(new Bytecode.LoadConst(true));
-				bytecodes.add(new Bytecode.Label(falseLabel));
-				break;
+				translateNotHelper(bytecodes);
+				return;
 			default:
 				throw new IllegalArgumentException("unknown binary operator encountered");
 		}
 	}
 
+
+	private void translate(Expr.Binary expr, Context context, List<Bytecode> bytecodes) {
+		String exitLabel = freshLabel()+"_exit_"+expr.getOp();
+		//come here
+		Attribute.Type lhs_attr = expr.getLhs().attribute(Attribute.Type.class);
+		JvmType lhs_type = toJvmType(lhs_attr.type);
+		Attribute.Type rhs_attr = expr.getRhs().attribute(Attribute.Type.class);
+		JvmType rhs_type = toJvmType(rhs_attr.type);
+
+		Expr lhs = expr.getLhs();
+		Expr rhs = expr.getRhs();
+
+
+		String doRhs = freshLabel()+"do_rhs";
+		if(expr.getOp() == Expr.BOp.AND){
+			//if first cond fails, exit.
+			translate(lhs,context,bytecodes);
+			bytecodes.add(new Bytecode.If(IfMode.NE,doRhs));
+			bytecodes.add(new Bytecode.LoadConst(false));
+			bytecodes.add(new Bytecode.Goto(exitLabel));
+		}
+		bytecodes.add(new Bytecode.Label(doRhs));
+		translate(lhs,context,bytecodes);
+		translate(rhs,context,bytecodes);
+
+
+		//if an array or record
+		if(lhs_type == JAVA_UTIL_ARRAYLIST || rhs_type == JAVA_UTIL_ARRAYLIST || lhs_type == JAVA_UTIL_HASHMAP || rhs_type == JAVA_UTIL_HASHMAP){
+			//only attempt comparison if of same type
+			if(lhs_type != rhs_type){
+				switch (expr.getOp()){
+					case EQ:
+						bytecodes.add(new Bytecode.LoadConst(false));
+						return;
+					case NEQ:
+						bytecodes.add(new Bytecode.LoadConst(true));
+						return;
+					default:
+						throw new IllegalArgumentException("unknown binary operator encountered");
+				}
+			}else {
+				translateCollectionCompare((JvmType.Reference) lhs_type, expr.getOp(), context, bytecodes);
+			}
+			return;
+		}
+
+
+		int binOp = convertComparisonOperator(expr.getOp());
+		switch (expr.getOp()) {
+			case AND:
+			case OR:
+			case ADD:
+			case SUB:
+			case MUL:
+			case DIV:
+			case REM:
+				bytecodes.add(new Bytecode.BinOp(binOp, lhs_type));
+				break;
+			case EQ:
+			case NEQ:
+			case LT:
+			case LTEQ:
+			case GT:
+			case GTEQ:
+				String trueLabel = freshLabel()+"_true_"+binOp;
+
+				bytecodes.add(new Bytecode.IfCmp(binOp, lhs_type, trueLabel));
+				bytecodes.add(new Bytecode.LoadConst(false));
+				bytecodes.add(new Bytecode.Goto(exitLabel));
+				bytecodes.add(new Bytecode.Label(trueLabel));
+				bytecodes.add(new Bytecode.LoadConst(true));
+
+				break;
+			default:
+				throw new IllegalArgumentException("unknown binary operator encountered");
+		}
+		bytecodes.add(new Bytecode.Label(exitLabel));
+
+	}
+
 	private void translate(Expr.Literal expr, Context context, List<Bytecode> bytecodes) {
 		Object value = expr.getValue();
-		// FIXME: it's possible that the value here is an instanceof List or
-		// Map. This indicates a record or array constant, which cannot be
-		// passed through to the LoadConst bytecode.
-		bytecodes.add(new Bytecode.LoadConst(value));
+
+		Attribute.Type attr = expr.attribute(Attribute.Type.class);
+		Type t = attr.type;
+		while(t instanceof Type.Named){
+			t = this.declaredTypes.get(((Type.Named) t).getName());
+		}
+
+		if(t instanceof Type.Array){
+			if(value instanceof String) {//i.e "HELLO"
+				String s = (String) value;
+				ArrayList<Expr> arr_args = new ArrayList<>();
+				ArrayList<Attribute> char_attributes = new ArrayList<>();
+				char_attributes.add(new Attribute.Type(new Type.Int()));
+				for (char c : s.toCharArray()) {
+					Expr expr_c = new Expr.Literal(c, char_attributes);
+					arr_args.add(expr_c);
+				}
+
+				Expr arr = new Expr.ArrayInitialiser(arr_args, new Attribute.Type(new Type.Array(new Type.Int())));
+				translate(arr, context, bytecodes);
+			}else if(value instanceof List){//i.e [1]
+				Type element_type = ((Type.Array) t).getElement();
+				int array_reg_index = createArray(context,bytecodes);
+				//convert to expr, put in array
+				for(Object o:(List)value){
+					putObjectInArray(o,element_type,array_reg_index,bytecodes);
+				}
+				bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
+			}
+
+		}else if(t instanceof Type.Record){
+			if(value instanceof Map) {
+				//map name to type
+				HashMap<String,Type> name_to_type = new HashMap<>();
+				for(Pair<Type,String> p : ((Type.Record) t).getFields()){
+					name_to_type.put(p.second(),p.first());
+				}
+
+				int map_reg_index = createHashMap(context, bytecodes);
+				for (Map.Entry<String, Object> entry : ((Map<String, Object>) value).entrySet()) {
+					String name = entry.getKey();
+					putObjectInHashMap(name,entry.getValue(),name_to_type.get(name),map_reg_index,bytecodes);
+				}
+				bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
+
+			}else{
+				throw new RuntimeException("unknown value of record type");
+			}
+		}else{
+
+			bytecodes.add(new Bytecode.LoadConst(value));
+
+		}
+
+	}
+
+	public void putObjectInArray(Object o,Type t,int array_reg_index,List<Bytecode> bytecodes){
+
+		//get array
+		bytecodes.add(new Bytecode.Load(array_reg_index, JAVA_UTIL_ARRAYLIST));
+		//put on stack
+		bytecodes.add(new Bytecode.LoadConst(o));
+		boxAsNecessary(t,bytecodes);
+		//convert to object
+		JvmType.Function boxMethodType =
+				new JvmType.Function(new JvmType.Primitive.Bool(), JvmTypes.JAVA_LANG_OBJECT);
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "add", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_BOOLEAN));
+
+
 	}
 
 	private void translate(Expr.IndexOf expr, Context context, List<Bytecode> bytecodes) {
+		//getting value out of array
+
+		//put array on stack
+		translate(expr.getSource(),context,bytecodes);
+
+		//put index on stack
+		translate(expr.getIndex(),context,bytecodes);
+
+		//get element at index
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT,JvmTypes.INT);
+
+		//returns 0(False) or 1(True)
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "get", boxMethodType,VIRTUAL));
+
+		//this should be an array type
+		Attribute.Type attr = expr.attribute(Attribute.Type.class);
+		addReadConversion(attr.type,bytecodes);
 
 	}
 
@@ -441,18 +847,85 @@ public class ClassFileWriter {
 		JvmType.Function type = methodTypes.get(expr.getName());
 		List<Expr> arguments = expr.getArguments();
 		for(int i=0;i!=arguments.size();++i) {
-			translate(arguments.get(i),context,bytecodes);
+			Expr e =  arguments.get(i);
+			translate(e,context,bytecodes);
+			Attribute.Type attr = e.attribute(Attribute.Type.class);
+			JvmType arg_type = toJvmType(attr.type);
+			cloneAsNecessary(arg_type,bytecodes);
 		}
-		bytecodes.add(new Bytecode.Invoke(context.getEnclosingClass(), expr.getName(), type, Bytecode.InvokeMode.STATIC));
+		bytecodes.add(new Bytecode.Invoke(context.getEnclosingClass(), expr.getName(), type, STATIC));
 	}
 
 	private void translate(Expr.RecordAccess expr, Context context, List<Bytecode> bytecodes) {
+		//get hashmap
+		translate(expr.getSource(),context,bytecodes);
+		//put string
+		bytecodes.add(new Bytecode.LoadConst(expr.getName()));
+		//get method
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT);
 
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "get", boxMethodType,VIRTUAL));
+
+		//cast to expected type
+		Attribute.Type attr = expr.attribute(Attribute.Type.class);
+		Type t = attr.type;
+		addReadConversion(t,bytecodes);
+
+	}
+
+	private void putInHashMap(String name, Expr value,Context context,List<Bytecode> bytecodes){
+		//put String on stack
+		bytecodes.add(new Bytecode.LoadConst(name));
+		//put val on stack
+		translate(value,context,bytecodes);
+		Attribute.Type attr = value.attribute(Attribute.Type.class);
+		Type t = attr.type;
+		//convert  to object
+		boxAsNecessary(t,bytecodes);
+		cloneAsNecessary(toJvmType(t),bytecodes);
+
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT,JvmTypes.JAVA_LANG_OBJECT);
+
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "put", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_OBJECT));
+	}
+
+	private void putObjectInHashMap(String name, Object value,Type t,int map_reg_index,List<Bytecode> bytecodes){
+		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
+		//put String on stack
+		bytecodes.add(new Bytecode.LoadConst(name));
+		//put val on stack
+		bytecodes.add(new Bytecode.LoadConst(value));
+		boxAsNecessary(t,bytecodes);
+
+
+		JvmType.Function boxMethodType =
+				new JvmType.Function(JvmTypes.JAVA_LANG_OBJECT, JvmTypes.JAVA_LANG_OBJECT,JvmTypes.JAVA_LANG_OBJECT);
+
+		//add object to array
+		bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_HASHMAP, "put", boxMethodType,VIRTUAL));
+		//pop
+		bytecodes.add(new Bytecode.Pop(JvmTypes.JAVA_LANG_OBJECT));
 	}
 
 	private void translate(Expr.RecordConstructor expr, Context context, List<Bytecode> bytecodes) {
+		int map_reg_index = createHashMap(context,bytecodes);
+		for (Pair<String, Expr> field : expr.getFields()) {
+			//get map
+			bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
+			putInHashMap(field.first(),field.second(),context,bytecodes);
+		}
+		//leave on top of array
+		bytecodes.add(new Bytecode.Load(map_reg_index, JAVA_UTIL_HASHMAP));
 
 	}
+
+
 
 	private void translate(Expr.Unary expr, Context context, List<Bytecode> bytecodes) {
 		translate(expr.getExpr(),context,bytecodes);
@@ -464,8 +937,16 @@ public class ClassFileWriter {
 		case NEG:
 			bytecodes.add(new Bytecode.Neg(JvmTypes.INT));
 			break;
+		case LENGTHOF:
+			JvmType.Function boxMethodType =
+					new JvmType.Function(JvmTypes.INT);
+
+			//returns 0(False) or 1(True)
+			bytecodes.add(new Bytecode.Invoke(JAVA_UTIL_ARRAYLIST, "size", boxMethodType,VIRTUAL));
+
+			break;
 		default:
-			throw new IllegalArgumentException("unknown unary operator encountered");
+			throw new IllegalArgumentException("unknown unary operator encountered: "+expr.toString());
 		}
 	}
 
@@ -582,7 +1063,7 @@ public class ClassFileWriter {
 		String boxMethodName = "valueOf";
 		JvmType.Function boxMethodType = new JvmType.Function(owner,jvmType);
 		bytecodes.add(new Bytecode.Invoke(owner, boxMethodName, boxMethodType,
-				Bytecode.InvokeMode.STATIC));
+				STATIC));
 	}
 
 	/**
@@ -715,6 +1196,7 @@ public class ClassFileWriter {
 		return "label" + fresh++;
 	}
 
+
 	private static int fresh = 0;
 
 	/**
@@ -791,14 +1273,20 @@ public class ClassFileWriter {
 		 */
 		private final Map<String,Integer> environment;
 
+		private final Stack<Map<String,String>> loopManagement;
+
+
+
 		public Context(JvmType.Clazz enclosingClass, Map<String,Integer> environment) {
 			this.enclosingClass = enclosingClass;
 			this.environment = environment;
+			this.loopManagement = new Stack<>();
 		}
 
 		public Context(Context context) {
 			this.enclosingClass = context.enclosingClass;
 			this.environment = new HashMap<String,Integer>(context.environment);
+			this.loopManagement = new Stack<>();
 		}
 
 		/**
@@ -835,5 +1323,20 @@ public class ClassFileWriter {
 			return environment.get(var);
 		}
 
+		public void addLoop(HashMap<String,String> loop){
+			loopManagement.add(loop);
+		}
+
+		public Map<String,String> viewMostRecentLoop(){
+			return loopManagement.peek();
+		}
+
+		public void removeLoop(){
+			loopManagement.pop();
+		}
+
 	}
+
+
+
 }

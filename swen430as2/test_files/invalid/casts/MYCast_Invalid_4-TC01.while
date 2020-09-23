@@ -1,0 +1,11 @@
+type Record_1 is { int field, null g}
+type Record_2 is { int field, bool g}| { bool field, null g}
+
+Record_2 f(Record_1 r) {
+    return r;
+}
+
+void main() {
+    assert f({field: 1,g:null}) == {field: 1,g:null};
+    assert f({field: 3,g: null}) == {field: 3,g: null};
+}
