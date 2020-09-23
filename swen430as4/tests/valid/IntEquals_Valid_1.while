@@ -1,0 +1,13 @@
+int[] f(int x, int y) {
+    if(x == y) {
+        return "EQ";
+    } else {
+        return "NOT EQ";
+    }
+}
+
+void main() {
+   assert f(1,4) == "NOT EQ";
+   assert f(1,4) == "NOT EQ";
+   assert f(0,0) == [69,81];
+}
