@@ -590,6 +590,10 @@ public class X86FileWriter {
 		} else if (e instanceof Expr.Binary) {
 			Expr.Binary b = (Expr.Binary) e;
 			switch (b.getOp()) {
+			case AND:
+					translateCondition(b.getLhs(),falseLabel,context);
+					translateCondition(b.getRhs(),falseLabel,context);
+					break;
 			case OR:
 				translateShortCircuitDisjunctCondition((Expr.Binary) e, falseLabel, context);
 				break;
@@ -1017,6 +1021,12 @@ public class X86FileWriter {
 		case ADD:
 			instructions.add(new Instruction.RegReg(Instruction.RegRegOp.add, rhs.register, target.register));
 			break;
+		case SUB:
+			instructions.add(new Instruction.RegReg(Instruction.RegRegOp.sub, rhs.register, target.register));
+			break;
+		case MUL:
+			instructions.add(new Instruction.RegReg(Instruction.RegRegOp.imul, rhs.register, target.register));
+			break;
 		case DIV:
 			// The idiv instruction is curious because you cannot control where
 			// the result is stored. That is, the result is always stored into
@@ -1360,6 +1370,24 @@ public class X86FileWriter {
 
 	public void translateUnary(Expr.Unary e, RegisterLocation target, Context context) {
 		// FIXME: you need to implement this!
+		List<Instruction> instructions = context.instructions();
+		translate(e.getExpr(),target,context);
+
+		switch (e.getOp()){
+			case NOT:
+				instructions.add(new Instruction.Reg(Instruction.RegOp.not,target.register));
+				instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.and,1,target.register));
+				break;
+			case NEG:
+				instructions.add(new Instruction.Reg(Instruction.RegOp.neg,target.register));
+				break;
+			case LENGTHOF:
+				instructions.add(new Instruction.ImmIndReg(Instruction.ImmIndRegOp.mov,0,target.register,target.register));
+				break;
+			default:
+				throw new IllegalArgumentException("unknown unary operator: "+e.getOp());
+		}
+
 	}
 
 	public void translateVariable(Expr.Variable e, Location target, Context context) {
