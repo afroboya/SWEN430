@@ -1,10 +1,6 @@
 package whilelang.compiler;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import jx86.lang.Constant;
 import jx86.lang.Instruction;
@@ -387,6 +383,8 @@ public class X86FileWriter {
 	 */
 	public void translateBreak(Stmt.Break statement, Context context) {
 		// FIXME: you will need to implement this!
+		List<Instruction> instructions = context.instructions();
+		instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, context.viewRecentBreak()));
 	}
 
 	/**
@@ -398,6 +396,8 @@ public class X86FileWriter {
 	 */
 	public void translateContinue(Stmt.Continue statement, Context context) {
 		// FIXME: you will need to implement this!
+		List<Instruction> instructions = context.instructions();
+		instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, context.viewRecentContinue()));
 	}
 
 	/**
@@ -411,20 +411,29 @@ public class X86FileWriter {
 		// Translate Variable Declaration
 		translateVariableDeclaration(statement.getDeclaration(), context);
 		// Construct label for top of loop
+
 		String headerLabel = freshLabel();
+		String continueLabel = context.generateContinueLabel();
 		// Construct break label for exit of loop
-		String breakLabel = freshLabel();
+		String breakLabel = context.generateBreakLabel();
+
 		// Start loop, and translate condition
 		instructions.add(new Instruction.Label(headerLabel));
 		// Translate the condition expression and branch to the false label
 		translateCondition(statement.getCondition(), breakLabel, context);
 		// Translate Loop Body
 		translate(statement.getBody(), context);
+
+		instructions.add(new Instruction.Label(continueLabel));
 		// Translate Increment and loop around
 		translate(statement.getIncrement(), context);
 		instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, headerLabel));
 		// Exit ...
 		instructions.add(new Instruction.Label(breakLabel));
+
+		//remove labels
+		context.getRecentBreak();
+		context.getRecentContinue();
 	}
 
 	/**
@@ -523,7 +532,26 @@ public class X86FileWriter {
 	 * @param data
 	 */
 	public void translateWhile(Stmt.While statement, Context context) {
-		// FIXME: you will need to implement this!
+		List<Instruction> instructions = context.instructions();
+
+		// Construct label for top of loop
+		String headerLabel = context.generateContinueLabel();
+		// Construct break label for exit of loop
+		String breakLabel = context.generateBreakLabel();
+		// Start loop, and translate condition
+		instructions.add(new Instruction.Label(headerLabel));
+		// Translate the condition expression and branch to the false label
+		translateCondition(statement.getCondition(), breakLabel, context);
+		// Translate Loop Body
+		translate(statement.getBody(), context);
+
+		instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, headerLabel));
+		// Exit ...
+		instructions.add(new Instruction.Label(breakLabel));
+
+		//remove labels
+		context.getRecentBreak();
+		context.getRecentContinue();
 	}
 
 	/**
@@ -2266,6 +2294,8 @@ public class X86FileWriter {
 		private final X86File.Data data;
 		private List<Register> freeRegisters;
 		private String exitLabel;
+		private final Stack<String> breakLabels;
+		private final Stack<String> continueLabels;
 
 		public Context(List<Register> freeRegisters, Map<String, MemoryLocation> localVariables, X86File.Code code,
 				X86File.Data data) {
@@ -2274,6 +2304,8 @@ public class X86FileWriter {
 			this.data = data;
 			this.freeRegisters = freeRegisters;
 			this.exitLabel = null;
+			this.breakLabels = new Stack<>();
+			this.continueLabels = new Stack<>();
 		}
 
 		/**
@@ -2287,6 +2319,8 @@ public class X86FileWriter {
 			this.data = other.data;
 			this.freeRegisters = other.freeRegisters;
 			this.exitLabel = other.exitLabel;
+			this.breakLabels = other.breakLabels;
+			this.continueLabels = other.continueLabels;
 		}
 
 		public MemoryLocation getVariableLocation(String name) {
@@ -2301,6 +2335,42 @@ public class X86FileWriter {
 		 */
 		public String exitLabel() {
 			return exitLabel;
+		}
+
+		public String generateBreakLabel(){
+			String label = freshLabel();
+			addBreak(label);
+			return label;
+		}
+
+		public String viewRecentBreak() {
+			return breakLabels.peek();
+		}
+
+		public String getRecentBreak() {
+			return breakLabels.pop();
+		}
+
+		public void addBreak(String breakLabel){
+			breakLabels.push(breakLabel);
+		}
+
+		public String generateContinueLabel(){
+			String label = freshLabel();
+			addContinue(label);
+			return label;
+		}
+
+		public String viewRecentContinue() {
+			return continueLabels.peek();
+		}
+
+		public String getRecentContinue() {
+			return continueLabels.pop();
+		}
+
+		public void addContinue(String continueLabel){
+			continueLabels.push(continueLabel);
 		}
 
 		/**
