@@ -569,7 +569,7 @@ public class X86FileWriter {
 		RegisterLocation[] tmps = allocateRegisterLocations(context, statement.getExpr(), statement.getExpr());
 		// The exit label will represent the exit point from the switch
 		// statement. Any cases which end in a break will branch to it.
-		String exitLabel = freshLabel();
+		String exitLabel = context.generateBreakLabel();
 		// Translate the expression we are switching on, and place result
 		// into the target register.
 		translate(statement.getExpr(), tmps[0], context);
@@ -582,21 +582,39 @@ public class X86FileWriter {
 		// and it would be better to use a jump table in situations where we can
 		// (e.g. for integer values). However, in the general case (e.g. when
 		// switching on records), we cannot use a jump table anyway.
-		for (Stmt.Case c : statement.getCases()) {
+
+		String nextBody = freshLabel();
+
+		for (int i=0;i<statement.getCases().size();i++) {
+			Stmt.Case c = statement.getCases().get(i);
 			String nextLabel = freshLabel();
 			Expr constant = c.getValue();
 			if (constant != null) {
+				Attribute.Type attr = statement.getExpr().attribute(Attribute.Type.class);
+				c.getValue().attributes().add(attr);
 				// Not a default block
 				translate(c.getValue(), tmps[1], context);
 				bitwiseEquality(false, tmps[0], tmps[1], nextLabel, context);
 			}
 			// FIXME: need to handle break and continue statements!
+			instructions.add(new Instruction.Label(nextBody));
 			translate(c.getBody(), context);
-			instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, exitLabel)); // BROKEN
+			//if we are here then cond is true, skip next cond and go straight to body
+			//default should always be at the end of list so default check is slightly redundant
+			if (!c.isDefault() && (i+1)<statement.getCases().size()) {
+				nextBody = freshLabel();
+				instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, nextBody)); // BROKEN
+			}
+
 			instructions.add(new Instruction.Label(nextLabel));
+
+
 		}
 		// Finally, add the exit label
 		instructions.add(new Instruction.Label(exitLabel));
+
+		context.getRecentBreak();
+//		context.getRecentContinue();
 	}
 
 	// =================================================================
