@@ -782,7 +782,7 @@ public class X86FileWriter {
 
 			bitwiseEquality(e.getOp() != Expr.BOp.EQ, tmps[0], tmps[1], falseLabel, context);
 		}else{
-			// DONEFIXME: this will not work for arrays or records!
+			// DONEFIXME: above will not work for arrays or records!
 			compoundEquality((e.getOp() != Expr.BOp.EQ),tmps[0],tmps[1],falseLabel,context);
 		}
 	}
@@ -967,7 +967,7 @@ public class X86FileWriter {
 	 * @param target Location to store result in (either register or stack location)
 	 */
 	public void translateArrayGenerator(Expr.ArrayGenerator e, Location target, Context context) {
-//		// FIXME: you will need to implement this
+//		//DONEFIXME: you will need to implement this
 		List<Instruction> instructions = context.instructions();
 
 		//get size
@@ -1508,6 +1508,11 @@ public class X86FileWriter {
 	public void translateVariable(Expr.Variable e, Location target, Context context) {
 		// Determine the offset within the stack of this local variable.
 		MemoryLocation loc = context.getVariableLocation(e.getName());
+		//TODO check this is correct
+		Type type = unwrap(e.attribute(Attribute.Type.class).type);
+		if(type instanceof Type.Array) {
+			compoundCopy(loc, context);
+		}
 		// Copy data from variable location into target location.
 		bitwiseCopy(loc, target, context);
 	}
