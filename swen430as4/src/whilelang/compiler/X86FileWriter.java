@@ -382,7 +382,7 @@ public class X86FileWriter {
 	 * @param context
 	 */
 	public void translateBreak(Stmt.Break statement, Context context) {
-		// FIXME: you will need to implement this!
+		// DONEFIXME: you will need to implement this!
 		List<Instruction> instructions = context.instructions();
 		instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, context.viewRecentBreak()));
 	}
@@ -395,7 +395,7 @@ public class X86FileWriter {
 	 * @param context
 	 */
 	public void translateContinue(Stmt.Continue statement, Context context) {
-		// FIXME: you will need to implement this!
+		// DONEFIXME: you will need to implement this!
 		List<Instruction> instructions = context.instructions();
 		instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, context.viewRecentContinue()));
 	}
@@ -540,7 +540,7 @@ public class X86FileWriter {
 		String breakLabel = context.generateBreakLabel();
 		// Start loop, and translate condition
 		instructions.add(new Instruction.Label(headerLabel));
-		// Translate the condition expression and branch to the false label
+		// Translate the condition expression and branch to the false   label
 		translateCondition(statement.getCondition(), breakLabel, context);
 		// Translate Loop Body
 		translate(statement.getBody(), context);
@@ -596,7 +596,7 @@ public class X86FileWriter {
 				translate(c.getValue(), tmps[1], context);
 				bitwiseEquality(false, tmps[0], tmps[1], nextLabel, context);
 			}
-			// FIXME: need to handle break and continue statements!
+			//DONEFIXME: need to handle break and continue statements!
 			instructions.add(new Instruction.Label(nextBody));
 			translate(c.getBody(), context);
 			//if we are here then cond is true, skip next cond and go straight to body
@@ -614,7 +614,7 @@ public class X86FileWriter {
 		instructions.add(new Instruction.Label(exitLabel));
 
 		context.getRecentBreak();
-//		context.getRecentContinue();
+
 	}
 
 	// =================================================================
@@ -778,12 +778,12 @@ public class X86FileWriter {
 		if (isPrimitive(lhs_t) && isPrimitive(rhs_t)) {
 			// Perform a bitwise comparison of the two data chunks
 
-			// FIXME: this will not work for arrays or records!
+
 
 			bitwiseEquality(e.getOp() != Expr.BOp.EQ, tmps[0], tmps[1], falseLabel, context);
-		} else if (e.getOp() == Expr.BOp.EQ) {
-			// Must branch to false branch in this case.
-			instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, falseLabel));
+		}else{
+			// DONEFIXME: this will not work for arrays or records!
+			compoundEquality((e.getOp() != Expr.BOp.EQ),tmps[0],tmps[1],falseLabel,context);
 		}
 	}
 
@@ -825,8 +825,25 @@ public class X86FileWriter {
 	}
 
 	public MemoryLocation translateArrayLVal(Expr.IndexOf lval, Context context) {
-		// FIXME: you will need to implement this
-		throw new UnsupportedOperationException("implement me!");
+		//FIXME all of this is from  translateIndexOf it is probably wrong
+		List<Instruction> instructions = context.instructions();
+		// Translate source expression into a temporary register. In other words, store
+		// the records heap address into a temporary.
+		RegisterLocation base = context.selectFreeRegister();
+		translate(lval.getSource(), base, context);
+		// Lock base register to protected it
+		context = context.lockLocation(base);
+		// Translate index expression into another temporary register
+		RegisterLocation index = context.selectFreeRegister();
+		translate(lval.getIndex(), index, context);
+		// Multiply index by WORD_SIZE
+		multiplyByWordSize(index.register, context);
+		// Add length field
+		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.add, WORD_SIZE, index.register));
+		// Add index onto base register.
+		instructions.add(new Instruction.RegReg(Instruction.RegRegOp.add, index.register, base.register));
+		// Finally, copy bits into target location
+		return new MemoryLocation(base.register, 0);
 	}
 
 	// =================================================================
@@ -950,7 +967,41 @@ public class X86FileWriter {
 	 * @param target Location to store result in (either register or stack location)
 	 */
 	public void translateArrayGenerator(Expr.ArrayGenerator e, Location target, Context context) {
-		// FIXME: you will need to implement this
+//		// FIXME: you will need to implement this
+		List<Instruction> instructions = context.instructions();
+
+		//get size
+		RegisterLocation size = context.selectFreeRegister();
+		translate(e.getSize(), size, context);
+		context = context.lockLocation(size);
+		//find place to put array
+		RegisterLocation array = context.selectFreeRegister();
+		bitwiseCopy(size, array, context);
+		//increment size to account for length part
+		instructions.add(new Instruction.Reg(Instruction.RegOp.inc, array.register));
+		//multiply by how much space each takes
+		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.imul, WORD_SIZE, array.register));
+		//get some space
+		//array contains size (in bytes) to be allocated, after call will hold pointer to allocated memory
+		allocateSpaceOnHeap(array, context);
+		context = context.lockLocation(array);
+
+		// Write length field
+		MemoryLocation lengthField = new MemoryLocation(array.register, 0);
+		bitwiseCopy(size, lengthField, context);
+
+		//save to target
+		bitwiseCopy(array, target, context);
+		//save the value we want to write to a register
+		RegisterLocation val = context.selectFreeRegister();
+		translate(e.getValue(), val, context);
+		context = context.lockLocation(val);
+
+		//increment to get to where we want to fill
+		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.add, WORD_SIZE, array.register));
+		//fill
+		makeExternalMethodCall("intfill", context, null, array.register, val.register);
+
 	}
 
 	/**
@@ -981,7 +1032,25 @@ public class X86FileWriter {
 	 * @param target Location to store result in (either register or stack location)
 	 */
 	public void translateArrayInitialiser(Expr.ArrayInitialiser e, Location target, Context context) {
-		// FIXME: you will need to implement this
+		// DONEFIXME: you will need to implement this
+
+
+		Type.Array type = (Type.Array) unwrap(e.attribute(Attribute.Type.class).type);
+		// Construct uninitialised compound object
+		RegisterLocation base = compoundInitialiser(e.getArguments().size(), type, target, context);
+		// Lock base to prevent it being overwritten
+		context = context.lockLocation(base);
+		// Translate fields in the order and write into the heap space
+		int offset = WORD_SIZE;
+		//
+		for (Expr arr_expr: e.getArguments()){
+			// Write payload
+			MemoryLocation payloadField = new MemoryLocation(base.register, offset);
+			translate(arr_expr, payloadField, context);
+			// Advance over payload
+			offset += WORD_SIZE;
+		}
+
 	}
 
 	/**
@@ -1415,7 +1484,7 @@ public class X86FileWriter {
 	}
 
 	public void translateUnary(Expr.Unary e, RegisterLocation target, Context context) {
-		// FIXME: you need to implement this!
+		// DONEFIXME: you need to implement this!
 		List<Instruction> instructions = context.instructions();
 		translate(e.getExpr(),target,context);
 
