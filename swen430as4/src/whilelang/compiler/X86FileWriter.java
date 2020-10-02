@@ -590,11 +590,22 @@ public class X86FileWriter {
 			String nextLabel = freshLabel();
 			Expr constant = c.getValue();
 			if (constant != null) {
+				//add missing attributes
 				Attribute.Type attr = statement.getExpr().attribute(Attribute.Type.class);
 				c.getValue().attributes().add(attr);
 				// Not a default block
 				translate(c.getValue(), tmps[1], context);
-				bitwiseEquality(false, tmps[0], tmps[1], nextLabel, context);
+				Type expr_type = unwrap(statement.getExpr().attribute(Attribute.Type.class).type);
+
+				// DONEFIXME: above will not work for arrays or records!
+				if (isPrimitive(expr_type)) {
+					// Perform a bitwise comparison of the two data chunks
+					bitwiseEquality(false, tmps[0], tmps[1], nextLabel, context);
+				}else{
+					//swap around as left is locked
+					compoundEquality(false,tmps[1],tmps[0],nextLabel,context);
+				}
+
 			}
 			//DONEFIXME: need to handle break and continue statements!
 			instructions.add(new Instruction.Label(nextBody));
@@ -603,7 +614,7 @@ public class X86FileWriter {
 			//default should always be at the end of list so default check is slightly redundant
 			if (!c.isDefault() && (i+1)<statement.getCases().size()) {
 				nextBody = freshLabel();
-				instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, nextBody)); // BROKEN
+				instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, nextBody));
 			}
 
 			instructions.add(new Instruction.Label(nextLabel));
@@ -777,9 +788,6 @@ public class X86FileWriter {
 		//
 		if (isPrimitive(lhs_t) && isPrimitive(rhs_t)) {
 			// Perform a bitwise comparison of the two data chunks
-
-
-
 			bitwiseEquality(e.getOp() != Expr.BOp.EQ, tmps[0], tmps[1], falseLabel, context);
 		}else{
 			// DONEFIXME: above will not work for arrays or records!
