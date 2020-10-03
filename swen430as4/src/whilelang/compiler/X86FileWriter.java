@@ -1538,7 +1538,7 @@ public class X86FileWriter {
 		MemoryLocation loc = context.getVariableLocation(e.getName());
 		//TODO check this is correct
 		Type type = unwrap(e.attribute(Attribute.Type.class).type);
-		if(type instanceof Type.Array) {
+		if(!isPrimitive(type)) {
 			compoundCopy(loc, context);
 		}
 		// Copy data from variable location into target location.
