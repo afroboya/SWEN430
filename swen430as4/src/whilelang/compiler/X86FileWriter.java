@@ -573,6 +573,7 @@ public class X86FileWriter {
 		// Translate the expression we are switching on, and place result
 		// into the target register.
 		translate(statement.getExpr(), tmps[0], context);
+		Type lhs_t = unwrap(statement.getExpr().attribute(Attribute.Type.class).type);
 		// Lock the target register here. This is necessary because we will only
 		// evaluate this once, and we want to retain its value across each of
 		// the comparisons needed for the cases.
@@ -595,15 +596,18 @@ public class X86FileWriter {
 				c.getValue().attributes().add(attr);
 				// Not a default block
 				translate(c.getValue(), tmps[1], context);
-				Type expr_type = unwrap(statement.getExpr().attribute(Attribute.Type.class).type);
+				Type rhs_t = unwrap(c.getValue().attribute(Attribute.Type.class).type);
+
 
 				// DONEFIXME: above will not work for arrays or records!
-				if (isPrimitive(expr_type)) {
+				if (isPrimitive(lhs_t) && isPrimitive(rhs_t)) {
 					// Perform a bitwise comparison of the two data chunks
 					bitwiseEquality(false, tmps[0], tmps[1], nextLabel, context);
-				}else{
+				}else if(!isPrimitive(lhs_t) && !isPrimitive(rhs_t)){
 					//swap around as left is locked
 					compoundEquality(false,tmps[1],tmps[0],nextLabel,context);
+				}else{//one is primitive one is not, wont be equal
+					instructions.add(new Instruction.Addr(Instruction.AddrOp.jmp, nextLabel));
 				}
 
 			}
@@ -833,25 +837,7 @@ public class X86FileWriter {
 	}
 
 	public MemoryLocation translateArrayLVal(Expr.IndexOf lval, Context context) {
-		//FIXME all of this is from  translateIndexOf it is probably wrong
-		List<Instruction> instructions = context.instructions();
-		// Translate source expression into a temporary register. In other words, store
-		// the records heap address into a temporary.
-		RegisterLocation base = context.selectFreeRegister();
-		translate(lval.getSource(), base, context);
-		// Lock base register to protected it
-		context = context.lockLocation(base);
-		// Translate index expression into another temporary register
-		RegisterLocation index = context.selectFreeRegister();
-		translate(lval.getIndex(), index, context);
-		// Multiply index by WORD_SIZE
-		multiplyByWordSize(index.register, context);
-		// Add length field
-		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.add, WORD_SIZE, index.register));
-		// Add index onto base register.
-		instructions.add(new Instruction.RegReg(Instruction.RegRegOp.add, index.register, base.register));
-		// Finally, copy bits into target location
-		return new MemoryLocation(base.register, 0);
+		return indexHelper(lval.getSource(),lval.getIndex(),context);
 	}
 
 	// =================================================================
@@ -926,25 +912,34 @@ public class X86FileWriter {
 	 * @param context
 	 */
 	public void translateIndexOf(Expr.IndexOf e, Location target, Context context) {
+		MemoryLocation elementLocation = indexHelper(e.getSource(),e.getIndex(),context);
+		bitwiseCopy(elementLocation, target, context);
+	}
+
+	public MemoryLocation indexHelper(Expr e,Expr expr_index,Context context){
 		List<Instruction> instructions = context.instructions();
 		// Translate source expression into a temporary register. In other words, store
 		// the records heap address into a temporary.
 		RegisterLocation base = context.selectFreeRegister();
-		translate(e.getSource(), base, context);
+		translate(e, base, context);
 		// Lock base register to protected it
 		context = context.lockLocation(base);
 		// Translate index expression into another temporary register
 		RegisterLocation index = context.selectFreeRegister();
-		translate(e.getIndex(), index, context);
+		translate(expr_index, index, context);
+
+		//account for tags space
+		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.imul, 2, index.register));
 		// Multiply index by WORD_SIZE
 		multiplyByWordSize(index.register, context);
+		// skip tag field
+		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.add, WORD_SIZE, index.register));
 		// Add length field
 		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.add, WORD_SIZE, index.register));
 		// Add index onto base register.
 		instructions.add(new Instruction.RegReg(Instruction.RegRegOp.add, index.register, base.register));
 		// Finally, copy bits into target location
-		MemoryLocation elementLocation = new MemoryLocation(base.register, 0);
-		bitwiseCopy(elementLocation, target, context);
+		return new MemoryLocation(base.register, 0);
 	}
 
 	/**
@@ -985,6 +980,8 @@ public class X86FileWriter {
 		//find place to put array
 		RegisterLocation array = context.selectFreeRegister();
 		bitwiseCopy(size, array, context);
+		//account for tags
+		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.imul, 2, array.register));
 		//increment size to account for length part
 		instructions.add(new Instruction.Reg(Instruction.RegOp.inc, array.register));
 		//multiply by how much space each takes
@@ -1008,7 +1005,7 @@ public class X86FileWriter {
 		//increment to get to where we want to fill
 		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.add, WORD_SIZE, array.register));
 		//fill
-		makeExternalMethodCall("intfill", context, null, array.register, val.register);
+		makeExternalMethodCall("objfill", context, null, array.register, val.register);
 
 	}
 
@@ -1053,9 +1050,15 @@ public class X86FileWriter {
 		//
 		for (Expr arr_expr: e.getArguments()){
 			// Write payload
+			MemoryLocation tagField = new MemoryLocation(base.register, offset);
+			//write 0 if not primitive
+			Type expr_type = unwrap(arr_expr.attribute(Attribute.Type.class).type);
+			translatePrimitiveLiteral(!isPrimitive(expr_type),tagField, context);
+
+			// Advance over payload
+			offset += WORD_SIZE;
 			MemoryLocation payloadField = new MemoryLocation(base.register, offset);
 			translate(arr_expr, payloadField, context);
-			// Advance over payload
 			offset += WORD_SIZE;
 		}
 
@@ -1340,6 +1343,15 @@ public class X86FileWriter {
 		//
 		for (int i = 0; i != literals.size(); ++i) {
 			Pair<Type,Object> ith = literals.get(i);
+
+			MemoryLocation tagField = new MemoryLocation(base.register, offset);
+			//write 0 if not primitive
+			Type expr_type = ith.first();
+			translatePrimitiveLiteral(!isPrimitive(expr_type),tagField, context);
+
+			// Advance over payload
+			offset += WORD_SIZE;
+
 			// Write payload
 			MemoryLocation payloadField = new MemoryLocation(base.register, offset);
 			translateObjectLiteral(ith.first(), ith.second(), payloadField, context);
@@ -1483,6 +1495,14 @@ public class X86FileWriter {
 		//
 		for (int i = 0; i != fields.size(); ++i) {
 			Pair<String, Expr> p = fields.get(i);
+
+			MemoryLocation tagField = new MemoryLocation(base.register, offset);
+			//write 0 if not primitive
+		  Type expr_type = unwrap(p.second().attribute(Attribute.Type.class).type);
+			translatePrimitiveLiteral(!isPrimitive(expr_type),tagField, context);
+			// Advance to payload
+			offset += WORD_SIZE;
+
 			// Write payload
 			MemoryLocation payloadField = new MemoryLocation(base.register, offset);
 			translate(p.second(), payloadField, context);
@@ -1891,7 +1911,7 @@ public class X86FileWriter {
 			bitwiseCopy(rhs, right, context);
 		}
 		// Call intcmp from runtime
-		makeExternalMethodCall("intcmp", context, left.register, left.register, right.register);
+		makeExternalMethodCall("objcmp", context, left.register, left.register, right.register);//DONEtodo change to objcmp
 		// Compare results from call against zero
 		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.cmp, 0, left.register));
 		// Finally, dispatch on result
@@ -1916,7 +1936,7 @@ public class X86FileWriter {
 			bitwiseCopy(from, base, context);
 		}
 		// Call intcpy from runtime
-		makeExternalMethodCall("intcpy", context, base.register, base.register);
+		makeExternalMethodCall("objcpy", context, base.register, base.register);
 		// Copy resulting pointer to target location
 		bitwiseCopy(base, from, context);
 	}
@@ -1961,7 +1981,7 @@ public class X86FileWriter {
 		}
 		// Write compound size to target register (one word for length, two words per
 		// item).
-		int size = (1 + n) * WORD_SIZE;
+		int size = (1 + n*2) * WORD_SIZE;
 		instructions.add(new Instruction.ImmReg(Instruction.ImmRegOp.mov, size, base.register));
 		// Allocate size bytes on heap
 		allocateSpaceOnHeap(base, context);
@@ -2126,6 +2146,8 @@ public class X86FileWriter {
 		int offset = WORD_SIZE;
 		//
 		for (Pair<Type, String> e : type.getFields()) {
+			//increase offset to skip tag
+			offset += WORD_SIZE;
 			// Check for field
 			if (e.second().equals(field)) {
 				break;
